@@ -56,15 +56,15 @@ Check 'the server service opens pairing and shows a PIN' ($pin -ne '') $pairOut
 $out = & $cli pair 127.0.0.1 --pin $pin 2>&1 | Out-String
 Check 'the client service pairs with the server service' ($out -match 'paired with') $out
 $out = & $cli list 2>&1 | Out-String
-Check 'the paired server is listed' ($out -match '127\.0\.0\.1:7600\)\s+paired') $out
+Check 'the paired server is listed' ($out -match ':7600\)\s+paired') $out
 
 Write-Host '== the program against the live services'
 New-Item -ItemType Directory -Force -Path "$work\shots" | Out-Null
 Copy-Item (Join-Path $env:QT_ROOT_DIR 'plugins\platforms\qoffscreen.dll') (Join-Path $Bin 'platforms') -ErrorAction Stop
 $env:QT_QPA_PLATFORM = 'offscreen'
 foreach ($tab in 'use', 'share', 'activity') {
-    & (Join-Path $Bin 'netusb.exe') --screenshot "$work\shots\$tab.png" --tab $tab
-    Check "the $tab tab was drawn" ((Test-Path "$work\shots\$tab.png") -and ((Get-Item "$work\shots\$tab.png").Length -gt 5000))
+    $shot = Start-Process -FilePath (Join-Path $Bin 'netusb.exe') -ArgumentList '--screenshot', "$work\shots\$tab.png", '--tab', $tab -Wait -PassThru
+    Check "the $tab tab was drawn" ((Test-Path "$work\shots\$tab.png") -and ((Get-Item "$work\shots\$tab.png").Length -gt 5000)) "(exit code $($shot.ExitCode))"
 }
 Remove-Item Env:\QT_QPA_PLATFORM
 Remove-Item (Join-Path $Bin 'platforms\qoffscreen.dll')

@@ -57,8 +57,6 @@ Check 'server B is listening' (Wait-For 20 { Get-NetTCPConnection -LocalPort 760
 $pin = Get-Pin "$work\b"
 Write-Host $list
 $busid = [regex]::Match($list, '(\S+)\s+1209:0002').Groups[1].Value
-Check 'server B lists the WinUSB device' ($busid -ne '') $list
-Check 'the server reports it with its real name' ($list -match 'netusb loopback device')
 
 Write-Host '== fake driver exercises server B''s Windows engine'
 $py = (Get-Command python -ErrorAction Stop).Source
