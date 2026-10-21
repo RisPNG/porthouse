@@ -25,7 +25,7 @@ Invoke-WebRequest -Uri $url -OutFile $inst
 $got = (Get-FileHash $inst -Algorithm SHA256).Hash.ToLower()
 if ($got -ne $sha) { throw "installer checksum mismatch: $got" }
 $p = Start-Process -FilePath $inst -ArgumentList '/VERYSILENT', '/NORESTART', '/SUPPRESSMSGBOXES', '/SP-', "/LOG=$work\usbip-install.log" -Wait -PassThru
-Write-Host "installer exit code: $($p.ExitCode)"
+Write-Host "installer exit code: $($p.ExitCode)  (the third-party installer sometimes crashes on exit after finishing; the checks below judge the result)"
 Get-Content "$work\usbip-install.log" -Tail 40 -ErrorAction SilentlyContinue | Write-Host
 $usbip = Join-Path $env:ProgramFiles 'USBip\usbip.exe'
 Check 'usbip.exe is installed' (Test-Path $usbip)

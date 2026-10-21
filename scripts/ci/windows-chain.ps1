@@ -36,7 +36,11 @@ $inst = "$work\USBip-x64.exe"
 Invoke-WebRequest -Uri $url -OutFile $inst
 if ((Get-FileHash $inst -Algorithm SHA256).Hash.ToLower() -ne $sha) { throw 'installer checksum mismatch' }
 $p = Start-Process -FilePath $inst -ArgumentList '/VERYSILENT', '/NORESTART', '/SUPPRESSMSGBOXES', '/SP-', "/LOG=$work\usbip-install.log" -Wait -PassThru
-Check 'usbip-win2 installed' ($p.ExitCode -eq 0 -and (Test-Path "$env:ProgramFiles\USBip\usbip.exe")) "exit=$($p.ExitCode)"
+# The third-party installer has been seen to crash on exit (0xC0000374) after finishing its work, so judge
+# the result by what matters: the importer exists and the virtual host controller is present.
+if ($p.ExitCode -ne 0) { Write-Host "NOTE: the installer exited with $($p.ExitCode); checking the result instead" }
+$hc = Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue | Where-Object { $_.FriendlyName -like '*USBip*' -and $_.Status -eq 'OK' }
+Check 'usbip-win2 is installed (usbip.exe and its virtual host controller are present)' ((Test-Path "$env:ProgramFiles\USBip\usbip.exe") -and ($null -ne $hc))
 
 Write-Host '== server A shares the virtual loopback device; client 1 plugs it into Windows'
 $env:NETUSB_TRACE = '1'
