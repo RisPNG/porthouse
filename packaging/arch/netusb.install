@@ -1,0 +1,8 @@
+post_install() {
+  echo 'Start the services with: systemctl enable --now netusb-server netusb-client'
+  echo 'Add yourself to the netusb group to use the program without root: usermod -aG netusb "$USER"'
+}
+
+post_upgrade() {
+  systemctl try-restart netusb-server.service netusb-client.service || true
+}
