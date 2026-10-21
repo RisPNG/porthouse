@@ -2,54 +2,48 @@
 # listing the virtual test device. No driver involved.
 param([string]$Bin = "$PWD\target\release")
 $ErrorActionPreference = 'Stop'
-$srv = Join-Path $Bin 'netusb-server.exe'
-$cli = Join-Path $Bin 'netusb-client.exe'
+. "$PSScriptRoot\windows-lib.ps1"
 $work = Join-Path $env:RUNNER_TEMP 'nu-smoke'
-New-Item -ItemType Directory -Force -Path "$work\s", "$work\c" | Out-Null
 $port = 7600
-$fails = 0
-function Check($name, $ok, $detail = '') {
-    if ($ok) { Write-Host "  PASS  $name" } else { Write-Host "  FAIL  $name $detail"; $script:fails++ }
-}
 
 Write-Host '== programs start'
 Check 'server --help runs' ((& $srv --help 2>&1 | Out-String) -match 'netusb-server')
+Check 'client service --help runs' ((& $clid --help 2>&1 | Out-String) -match 'netusb-clientd')
 Check 'client --help runs' ((& $cli --help 2>&1 | Out-String) -match 'netusb-client')
 
-Write-Host '== server'
-$env:NETUSB_STATE_DIR = "$work\s"
-$sp = Start-Process -FilePath $srv -ArgumentList 'run', '--no-mdns', '--port', $port, '--test-device', 'mouse' `
-    -RedirectStandardError "$work\server.err" -RedirectStandardOutput "$work\server.out" -PassThru -NoNewWindow
+Write-Host '== services'
+$sp = Start-Nu $srv @('run', '--no-mdns', '--port', $port, '--test-device', 'mouse') "$work\s" 'server'
+$cp = Start-Nu $clid @('run') "$work\c" 'clientd'
 try {
-    $up = $false
-    for ($i = 0; $i -lt 40; $i++) {
-        if (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue) { $up = $true; break }
-        Start-Sleep -Milliseconds 250
-    }
-    Check 'server is listening' $up (Get-Content "$work\server.err" -Raw)
+    Check 'server answers on its control pipe' (Wait-ServerReady "$work\s") (Get-Content "$work\s\server.err" -Raw)
+    Check 'client service answers on its control pipe' (Wait-ClientReady "$work\c") (Get-Content "$work\c\clientd.err" -Raw)
+    Check 'server is listening' (Wait-For 20 { Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue })
 
     $pairOut = & $srv pair | Out-String
-    $pin = [regex]::Match($pairOut, 'PIN:\s+(\d{4}-\d{4})').Groups[1].Value
+    $pin = Get-Pin "$work\s"
     Check 'server prints a pairing PIN' ($pin -ne '') $pairOut
 
     Write-Host '== client'
-    $env:NETUSB_STATE_DIR = "$work\c"
-    $unpaired = & $cli list --host "127.0.0.1:$port" 2>&1 | Out-String
-    Check 'unpaired client is refused' ($unpaired -match 'not a paired server') $unpaired
+    Use-Instance "$work\c"
+    & $cli add "127.0.0.1:$port" | Out-Null
+    $unpaired = & $cli list 2>&1 | Out-String
+    Check 'unpaired client sees the server but not its devices' (($unpaired -match 'not paired') -and -not ($unpaired -match '99-1')) $unpaired
     $wrong = & $cli pair "127.0.0.1:$port" --pin 00000000 2>&1 | Out-String
     Check 'wrong PIN is rejected' ($wrong -match 'wrong PIN') $wrong
     $paired = & $cli pair "127.0.0.1:$port" --pin $pin 2>&1 | Out-String
     Check 'correct PIN pairs' ($paired -match 'paired with') $paired
-    $list = & $cli list --host "127.0.0.1:$port" 2>&1 | Out-String
+    $list = & $cli list 2>&1 | Out-String
     Check 'paired client lists the virtual mouse' ($list -match '99-1' -and $list -match '1209:0001') $list
     Write-Host $list
 
     Write-Host '== state files'
     Get-ChildItem "$work\s", "$work\c" | Format-Table Name, Length -AutoSize | Out-String | Write-Host
 } finally {
-    Stop-Process -Id $sp.Id -Force -ErrorAction SilentlyContinue
+    Stop-Process -Id $sp.Id, $cp.Id -Force -ErrorAction SilentlyContinue
     Write-Host '--- server log'
-    Get-Content "$work\server.err" -ErrorAction SilentlyContinue
+    Get-Content "$work\s\server.err" -ErrorAction SilentlyContinue
+    Write-Host '--- client service log'
+    Get-Content "$work\c\clientd.err" -ErrorAction SilentlyContinue
 }
 if ($fails -gt 0) { Write-Host "$fails check(s) failed"; exit 1 }
 Write-Host 'windows smoke: all checks passed'

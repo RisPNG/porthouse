@@ -20,6 +20,8 @@ install(FILES packaging/linux/netusb-server.service packaging/linux/netusb-clien
         DESTINATION lib/systemd/system)
 install(FILES packaging/linux/netusb-modules.conf
         DESTINATION lib/modules-load.d RENAME netusb.conf)
+install(FILES packaging/linux/netusb.sysusers
+        DESTINATION lib/sysusers.d RENAME netusb.conf)
 install(FILES packaging/linux/netusb-autostart.desktop
         DESTINATION /etc/xdg/autostart RENAME netusb.desktop)
 install(FILES LICENSE-MIT LICENSE-APACHE DESTINATION ${CMAKE_INSTALL_DOCDIR})

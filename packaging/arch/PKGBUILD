@@ -37,5 +37,4 @@ check() {
 package() {
   cd "$pkgname-$pkgver"
   DESTDIR="$pkgdir" cmake --install build
-  install -Dm644 packaging/linux/netusb.sysusers "$pkgdir/usr/lib/sysusers.d/netusb.conf"
 }

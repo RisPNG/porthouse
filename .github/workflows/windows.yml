@@ -1,0 +1,98 @@
+name: windows
+
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: never
+
+jobs:
+  rust:
+    name: programs build, tests, smoke
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup show
+      - name: tests
+        run: cargo test --workspace
+      - name: build release
+        run: cargo build --release --locked
+      - name: smoke test of the Windows programs
+        shell: pwsh
+        run: ./scripts/ci/windows-smoke.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-programs
+          path: |
+            target/release/netusb-server.exe
+            target/release/netusb-clientd.exe
+            target/release/netusb-client.exe
+          if-no-files-found: error
+
+  attach:
+    name: attach (real usbip-win2 driver, virtual mouse)
+    needs: rust
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-programs
+          path: target/release
+      - name: install driver, attach, move the pointer
+        shell: pwsh
+        run: ./scripts/ci/windows-attach.ps1
+
+  chain:
+    name: engine (virtual WinUSB device shared by the native Windows server)
+    needs: rust
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-programs
+          path: target/release
+      - name: engine test through a real WinUSB device
+        shell: pwsh
+        run: ./scripts/ci/windows-chain.ps1
+
+  installer:
+    name: installer (build the program, package, install, use, remove)
+    needs: rust
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-programs
+          path: target/release
+      - uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125
+        with:
+          version: '6.8.3'
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          cache: true
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
+      - name: build the program
+        shell: pwsh
+        run: |
+          cmake -S gui -B build\gui -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build\gui
+      - name: Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+      - name: build the installer
+        shell: pwsh
+        run: ./scripts/package-windows.ps1 -GuiBuild build\gui
+      - name: install, use, remove
+        shell: pwsh
+        run: ./scripts/ci/windows-installer.ps1 -Setup (Get-ChildItem dist\netusb-*-windows-x64-setup.exe).FullName
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: dist/netusb-*-windows-x64-setup.exe
+          if-no-files-found: error

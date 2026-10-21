@@ -7,52 +7,27 @@
 #   fake driver --TLS--> server B: control, bulk echo, cancel, ordering
 param([string]$Bin = "$PWD\target\release")
 $ErrorActionPreference = 'Stop'
-$srv = Join-Path $Bin 'netusb-server.exe'
-$cli = Join-Path $Bin 'netusb-client.exe'
+. "$PSScriptRoot\windows-lib.ps1"
 $work = Join-Path $env:RUNNER_TEMP 'nu-chain'
-New-Item -ItemType Directory -Force -Path "$work\a", "$work\b", "$work\c1", "$work\c2", "$work\out" | Out-Null
-$fails = 0
-function Check($name, $ok, $detail = '') {
-    if ($ok) { Write-Host "  PASS  $name" } else { Write-Host "  FAIL  $name $detail"; $script:fails++ }
-}
-function Wait-For($seconds, [scriptblock]$cond) {
-    for ($i = 0; $i -lt ($seconds * 2); $i++) { if (& $cond) { return $true }; Start-Sleep -Milliseconds 500 }
-    return $false
-}
-function Start-NetusbServer($stateDir, $port, $extra) {
-    $env:NETUSB_STATE_DIR = $stateDir
-    $args = @('run', '--no-mdns', '--port', $port) + $extra
-    Start-Process -FilePath $srv -ArgumentList $args -RedirectStandardError "$stateDir\server.err" -RedirectStandardOutput "$stateDir\server.out" -PassThru -NoNewWindow
-}
-function Get-Pin($stateDir) {
-    $env:NETUSB_STATE_DIR = $stateDir
-    [regex]::Match((& $srv pair | Out-String), 'PIN:\s+(\d{4}-\d{4})').Groups[1].Value
-}
+New-Item -ItemType Directory -Force -Path "$work\out" | Out-Null
 
 Write-Host '== install usbip-win2 (pinned by checksum)'
-$url = 'https://github.com/vadimgrn/usbip-win2/releases/download/v.0.9.8.1/USBip-0.9.8.1-x64.exe'
-$sha = '38cad6d4432b52d5bb9409d9ad03b72fdffc4ada4cd3a48fbeca1a2752a8518a'
-$inst = "$work\USBip-x64.exe"
-Invoke-WebRequest -Uri $url -OutFile $inst
-if ((Get-FileHash $inst -Algorithm SHA256).Hash.ToLower() -ne $sha) { throw 'installer checksum mismatch' }
-$p = Start-Process -FilePath $inst -ArgumentList '/VERYSILENT', '/NORESTART', '/SUPPRESSMSGBOXES', '/SP-', "/LOG=$work\usbip-install.log" -Wait -PassThru
-# The third-party installer has been seen to crash on exit (0xC0000374) after finishing its work, so judge
-# the result by what matters: the importer exists and the virtual host controller is present.
-if ($p.ExitCode -ne 0) { Write-Host "NOTE: the installer exited with $($p.ExitCode); checking the result instead" }
-$hc = Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue | Where-Object { $_.FriendlyName -like '*USBip*' -and $_.Status -eq 'OK' }
-Check 'usbip-win2 is installed (usbip.exe and its virtual host controller are present)' ((Test-Path "$env:ProgramFiles\USBip\usbip.exe") -and ($null -ne $hc))
+Install-UsbipWin2 $work
 
 Write-Host '== server A shares the virtual loopback device; client 1 plugs it into Windows'
 $env:NETUSB_TRACE = '1'
-$sa = Start-NetusbServer "$work\a" 7600 @('--test-device', 'loopback')
+$sa = Start-Nu $srv @('run', '--no-mdns', '--port', 7600, '--test-device', 'loopback') "$work\a" 'server'
 Remove-Item Env:\NETUSB_TRACE
+$c1d = Start-Nu $clid @('run') "$work\c1" 'clientd'
+Check 'server A answers' (Wait-ServerReady "$work\a")
+Check 'client service 1 answers' (Wait-ClientReady "$work\c1")
 Check 'server A is listening' (Wait-For 20 { Get-NetTCPConnection -LocalPort 7600 -State Listen -ErrorAction SilentlyContinue })
 $pin = Get-Pin "$work\a"
-$env:NETUSB_STATE_DIR = "$work\c1"
+Use-Instance "$work\c1"
 Check 'client 1 paired with A' ((& $cli pair 127.0.0.1:7600 --pin $pin 2>&1 | Out-String) -match 'paired with')
-$c1 = Start-Process -FilePath $cli -ArgumentList 'use', '127.0.0.1:7600', '99-2', '--seconds', '240' `
-    -RedirectStandardOutput "$work\c1.out" -RedirectStandardError "$work\c1.err" -PassThru -NoNewWindow
-Check 'client 1 attached the virtual device' (Wait-For 60 { (Get-Content "$work\c1.out" -Raw -ErrorAction SilentlyContinue) -match 'attached' })
+$c1Out = & $cli use 127.0.0.1:7600 99-2 --seconds 600 2>&1 | Out-String
+Set-Content "$work\c1.out" $c1Out
+Check 'client 1 attached the virtual device' ($c1Out -match 'attached')
 
 $dev = $null
 $found = Wait-For 60 { $script:dev = Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue | Where-Object { $_.InstanceId -like 'USB\VID_1209&PID_0002*' }; $null -ne $script:dev }
@@ -75,13 +50,11 @@ if ($found) {
 
 Write-Host '== server B (native Windows engine) shares that WinUSB device'
 $env:NETUSB_TRACE = '1'   # log every URB the Windows engine handles
-$sb = Start-NetusbServer "$work\b" 7601 @()
+$sb = Start-Nu $srv @('run', '--no-mdns', '--port', 7601) "$work\b" 'server'
 Remove-Item Env:\NETUSB_TRACE
+Check 'server B answers' (Wait-ServerReady "$work\b")
 Check 'server B is listening' (Wait-For 20 { Get-NetTCPConnection -LocalPort 7601 -State Listen -ErrorAction SilentlyContinue })
 $pin = Get-Pin "$work\b"
-$env:NETUSB_STATE_DIR = "$work\c2"
-Check 'client 2 paired with B' ((& $cli pair 127.0.0.1:7601 --pin $pin 2>&1 | Out-String) -match 'paired with')
-$list = & $cli list --host 127.0.0.1:7601 2>&1 | Out-String
 Write-Host $list
 $busid = [regex]::Match($list, '(\S+)\s+1209:0002').Groups[1].Value
 Check 'server B lists the WinUSB device' ($busid -ne '') $list
@@ -93,20 +66,28 @@ Write-Host "python: $py"
 $cmd = "$work\fake-usbip.cmd"
 Set-Content -Path $cmd -Value "@echo off`r`n`"$py`" `"$PWD\scripts\ci\fake-usbip.py`" %*" -Encoding ascii
 $env:FAKE_OUT = "$work\out"
-$c2 = Start-Process -FilePath $cli -ArgumentList 'use', '127.0.0.1:7601', $busid, '--importer', $cmd, '--seconds', '150' `
-    -RedirectStandardOutput "$work\c2.out" -RedirectStandardError "$work\c2.err" -PassThru -NoNewWindow
+$c2d = Start-Nu $clid @('run', '--importer', $cmd) "$work\c2" 'clientd'
+Check 'client service 2 answers' (Wait-ClientReady "$work\c2")
+Use-Instance "$work\c2"
+Check 'client 2 paired with B' ((& $cli pair 127.0.0.1:7601 --pin $pin 2>&1 | Out-String) -match 'paired with')
+$list = & $cli list 2>&1 | Out-String
+Write-Host $list
+$busid = [regex]::Match($list, '(\S+)\s+1209:0002').Groups[1].Value
+Check 'server B lists the WinUSB device' ($busid -ne '') $list
+Check 'the server reports it with its real name' ($list -match 'netusb loopback device')
+$c2Out = & $cli use 127.0.0.1:7601 $busid --seconds 150 2>&1 | Out-String
+Set-Content "$work\c2.out" $c2Out
 Check 'the exercise finished' (Wait-For 60 { Test-Path "$work\out\done" })
 $results = Get-Content "$work\out\results.txt" -ErrorAction SilentlyContinue
 $results | ForEach-Object { Write-Host "   $_" }
 $nPass = ($results | Where-Object { $_ -like 'PASS*' }).Count
 $nFail = ($results | Where-Object { $_ -like 'FAIL*' }).Count
 Check 'all 14 engine checks passed' (($nPass -eq 14) -and ($nFail -eq 0)) "($nPass passed, $nFail failed)"
-Stop-Process -Id $c2.Id -Force -ErrorAction SilentlyContinue   # the exercise is over; do not wait out the timer
 
-Write-Host '--- client 1'; Get-Content "$work\c1.out", "$work\c1.err" -ErrorAction SilentlyContinue | Write-Host
-Write-Host '--- client 2'; Get-Content "$work\c2.out", "$work\c2.err" -ErrorAction SilentlyContinue | Write-Host
+Write-Host '--- client 1'; Get-Content "$work\c1.out", "$work\c1\clientd.err" -ErrorAction SilentlyContinue | Write-Host
+Write-Host '--- client 2'; Get-Content "$work\c2.out", "$work\c2\clientd.err" -ErrorAction SilentlyContinue | Write-Host
 Write-Host '--- server A (last 40 lines, with URB trace)'; Get-Content "$work\a\server.err" -Tail 40 -ErrorAction SilentlyContinue | Write-Host
 Write-Host '--- server B (last 60 lines, with URB trace)'; Get-Content "$work\b\server.err" -Tail 60 -ErrorAction SilentlyContinue | Write-Host
-Stop-Process -Id $sa.Id, $sb.Id -Force -ErrorAction SilentlyContinue
+Stop-Process -Id $sa.Id, $sb.Id, $c1d.Id, $c2d.Id -Force -ErrorAction SilentlyContinue
 if ($fails -gt 0) { Write-Host "$fails check(s) failed"; exit 1 }
 Write-Host 'windows chain: all checks passed'

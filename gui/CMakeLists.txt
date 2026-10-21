@@ -26,6 +26,7 @@ target_link_libraries(netusb-core PUBLIC Qt6::Core Qt6::Gui Qt6::Network Qt6::Wi
 
 qt_add_executable(netusb src/main.cpp)
 if(WIN32)
+    target_sources(netusb PRIVATE netusb.rc)
     set_target_properties(netusb PROPERTIES WIN32_EXECUTABLE ON)
 endif()
 

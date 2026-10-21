@@ -33,7 +33,7 @@ set(CPACK_RPM_POST_INSTALL_SCRIPT_FILE "${CMAKE_SOURCE_DIR}/packaging/linux/rpm/
 set(CPACK_RPM_PRE_UNINSTALL_SCRIPT_FILE "${CMAKE_SOURCE_DIR}/packaging/linux/rpm/preun.sh")
 set(CPACK_RPM_POST_UNINSTALL_SCRIPT_FILE "${CMAKE_SOURCE_DIR}/packaging/linux/rpm/postun.sh")
 set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION
-    /usr/lib /usr/lib/systemd /usr/lib/systemd/system /usr/lib/modules-load.d /etc /etc/xdg /etc/xdg/autostart
+    /usr/lib /usr/lib/systemd /usr/lib/systemd/system /usr/lib/modules-load.d /usr/lib/sysusers.d /etc /etc/xdg /etc/xdg/autostart
     /usr/share/applications /usr/share/icons /usr/share/icons/hicolor /usr/share/icons/hicolor/scalable
     /usr/share/icons/hicolor/scalable/apps /usr/share/doc)
 
