@@ -13,12 +13,12 @@ use crate::Service;
 const SDDL: &str = "D:(A;;GA;;;SY)(A;;GA;;;BA)(A;;GRGW;;;IU)";
 
 fn pipe_name(service: Service) -> String {
-    let suffix = std::env::var("NETUSB_IPC_DIR").map(|d| format!("-{d}")).unwrap_or_default();
+    let suffix = std::env::var("PORTHOUSE_IPC_DIR").map(|d| format!("-{d}")).unwrap_or_default();
     let suffix: String = suffix
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' })
         .collect();
-    format!(r"\\.\pipe\netusb-{}{}", service.name(), suffix)
+    format!(r"\\.\pipe\porthouse-{}{}", service.name(), suffix)
 }
 
 pub(crate) struct Listener {
@@ -77,9 +77,9 @@ pub(crate) async fn connect(service: Service) -> Result<(Box<dyn AsyncRead + Unp
                 return Ok((Box::new(r), Box::new(w)));
             }
             Err(e) if e.raw_os_error() == Some(231) => tokio::time::sleep(std::time::Duration::from_millis(50)).await,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => bail!("the netusb {} service is not running", service.name()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => bail!("the Porthouse {} service is not running", service.name()),
             Err(e) => return Err(e).context("opening the control pipe"),
         }
     }
-    bail!("the netusb {} service is busy", service.name())
+    bail!("the Porthouse {} service is busy", service.name())
 }

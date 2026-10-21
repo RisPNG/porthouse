@@ -7,9 +7,9 @@ $work = Join-Path $env:RUNNER_TEMP 'nu-smoke'
 $port = 7600
 
 Write-Host '== programs start'
-Check 'server --help runs' ((& $srv --help 2>&1 | Out-String) -match 'netusb-server')
-Check 'client service --help runs' ((& $clid --help 2>&1 | Out-String) -match 'netusb-clientd')
-Check 'client --help runs' ((& $cli --help 2>&1 | Out-String) -match 'netusb-client')
+Check 'server --help runs' ((& $srv --help 2>&1 | Out-String) -match 'porthouse-server')
+Check 'client service --help runs' ((& $clid --help 2>&1 | Out-String) -match 'porthouse-clientd')
+Check 'client --help runs' ((& $cli --help 2>&1 | Out-String) -match 'porthouse-client')
 
 Write-Host '== services'
 $sp = Start-Nu $srv @('run', '--no-mdns', '--port', $port, '--test-device', 'mouse') "$work\s" 'server'

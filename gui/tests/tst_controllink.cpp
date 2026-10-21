@@ -19,7 +19,7 @@ private slots:
 void TestControlLink::readsStateAndAnswersCalls() {
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
-    qputenv("NETUSB_IPC_DIR", dir.path().toLocal8Bit());
+    qputenv("PORTHOUSE_IPC_DIR", dir.path().toLocal8Bit());
 
     QLocalServer server;
     QVERIFY(server.listen(dir.filePath(QStringLiteral("client.sock"))));
@@ -61,7 +61,7 @@ void TestControlLink::readsStateAndAnswersCalls() {
 
 void TestControlLink::reportsAMissingService() {
     QTemporaryDir dir;
-    qputenv("NETUSB_IPC_DIR", dir.path().toLocal8Bit());
+    qputenv("PORTHOUSE_IPC_DIR", dir.path().toLocal8Bit());
     ControlLink link(QStringLiteral("server"));
     QSignalSpy replies(&link, &ControlLink::replied);
     link.start(200);

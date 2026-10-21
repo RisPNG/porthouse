@@ -1,20 +1,20 @@
 use anyhow::{bail, Context, Result};
-use netusb_ipc::{Client, Service};
+use porthouse_ipc::{Client, Service};
 use serde_json::{json, Value};
 
 fn usage() {
     println!(
-        "netusb-client list                          show servers, their devices and what is in use here
-netusb-client pair HOST[:PORT] [--pin PIN]  trust a server (PIN from `netusb-server pair`)
-netusb-client use HOST[:PORT] BUSID [--seconds N]   attach a device
-netusb-client release HOST[:PORT] BUSID     give a device back
-netusb-client add HOST[:PORT]               look for a server at this address
-netusb-client remove HOST[:PORT]            stop looking at this address
-netusb-client servers                       list paired servers
-netusb-client forget FINGERPRINT            stop trusting a server
-netusb-client ports                         show virtual USB ports (Linux)
+        "porthouse-client list                          show servers, their devices and what is in use here
+porthouse-client pair HOST[:PORT] [--pin PIN]  trust a server (PIN from `porthouse-server pair`)
+porthouse-client use HOST[:PORT] BUSID [--seconds N]   attach a device
+porthouse-client release HOST[:PORT] BUSID     give a device back
+porthouse-client add HOST[:PORT]               look for a server at this address
+porthouse-client remove HOST[:PORT]            stop looking at this address
+porthouse-client servers                       list paired servers
+porthouse-client forget FINGERPRINT            stop trusting a server
+porthouse-client ports                         show virtual USB ports (Linux)
 
-These commands talk to the netusb-clientd service, which must be running."
+These commands talk to the porthouse-clientd service, which must be running."
     );
 }
 
@@ -29,7 +29,7 @@ fn text<'a>(v: &'a Value, key: &str) -> &'a str {
 fn print_state(state: &Value) {
     let servers = state["servers"].as_array().cloned().unwrap_or_default();
     if servers.is_empty() {
-        println!("no servers found yet; add one with: netusb-client add HOST");
+        println!("no servers found yet; add one with: porthouse-client add HOST");
     }
     for s in &servers {
         let status = if s["error"].is_string() {
@@ -74,7 +74,7 @@ fn with_port(host: &str) -> String {
     if host.contains(':') {
         host.to_string()
     } else {
-        format!("{host}:{}", netusb_proto::DEFAULT_PORT)
+        format!("{host}:{}", porthouse_proto::DEFAULT_PORT)
     }
 }
 
@@ -84,7 +84,7 @@ async fn main() -> Result<()> {
     let cmd = args.next();
     match cmd.as_deref() {
         Some("-V") | Some("--version") => {
-            println!("netusb-client {}", env!("CARGO_PKG_VERSION"));
+            println!("porthouse-client {}", env!("CARGO_PKG_VERSION"));
             return Ok(());
         }
         Some("-h") | Some("--help") => {
@@ -93,7 +93,7 @@ async fn main() -> Result<()> {
         }
         #[cfg(target_os = "linux")]
         Some("ports") => {
-            for r in netusb_client::vhci::ports()? {
+            for r in porthouse_client::vhci::ports()? {
                 println!(
                     "{:<2} port {:>2}  state {}  {}",
                     if r.hub_super { "ss" } else { "hs" },
@@ -121,7 +121,7 @@ async fn main() -> Result<()> {
             }
         }
         Some("pair") => {
-            let host = with_port(&args.next().context("usage: netusb-client pair HOST[:PORT] [--pin PIN]")?);
+            let host = with_port(&args.next().context("usage: porthouse-client pair HOST[:PORT] [--pin PIN]")?);
             let mut pin = None;
             while let Some(a) = args.next() {
                 match a.as_str() {
@@ -132,7 +132,7 @@ async fn main() -> Result<()> {
             let pin = match pin {
                 Some(p) => p,
                 None => {
-                    eprint!("PIN shown by `netusb-server pair` on that machine: ");
+                    eprint!("PIN shown by `porthouse-server pair` on that machine: ");
                     let mut line = String::new();
                     std::io::stdin().read_line(&mut line)?;
                     line
@@ -142,7 +142,7 @@ async fn main() -> Result<()> {
             println!("paired with {}", text(&r, "name"));
         }
         Some("use") => {
-            let usage = "usage: netusb-client use HOST[:PORT] BUSID [--seconds N]";
+            let usage = "usage: porthouse-client use HOST[:PORT] BUSID [--seconds N]";
             let host = with_port(&args.next().context(usage)?);
             let busid = args.next().context(usage)?;
             let mut seconds = None;
@@ -153,10 +153,10 @@ async fn main() -> Result<()> {
                 }
             }
             c.call("use", json!({ "addr": host, "busid": busid, "seconds": seconds })).await?;
-            println!("attached {busid}; release it with: netusb-client release {host} {busid}");
+            println!("attached {busid}; release it with: porthouse-client release {host} {busid}");
         }
         Some("release") => {
-            let usage = "usage: netusb-client release HOST[:PORT] BUSID";
+            let usage = "usage: porthouse-client release HOST[:PORT] BUSID";
             let host = with_port(&args.next().context(usage)?);
             let busid = args.next().context(usage)?;
             c.call("release", json!({ "id": format!("{host}|{busid}") })).await?;
@@ -165,19 +165,19 @@ async fn main() -> Result<()> {
         Some("add") => {
             c.call(
                 "add_server",
-                json!({ "addr": args.next().context("usage: netusb-client add HOST[:PORT]")? }),
+                json!({ "addr": args.next().context("usage: porthouse-client add HOST[:PORT]")? }),
             )
             .await?;
         }
         Some("remove") => {
             c.call(
                 "remove_server",
-                json!({ "addr": args.next().context("usage: netusb-client remove HOST[:PORT]")? }),
+                json!({ "addr": args.next().context("usage: porthouse-client remove HOST[:PORT]")? }),
             )
             .await?;
         }
         Some("forget") => {
-            let fp = args.next().context("usage: netusb-client forget FINGERPRINT")?;
+            let fp = args.next().context("usage: porthouse-client forget FINGERPRINT")?;
             c.call("forget", json!({ "fingerprint": fp })).await?;
             println!("no longer trusting that server");
         }

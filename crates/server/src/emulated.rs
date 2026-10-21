@@ -4,8 +4,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::{anyhow, Result};
-use netusb_proto::usbip::{self, Urb, DIR_IN, ISO_DESC_LEN, MAX_URB_DATA};
-use netusb_proto::AttachInfo;
+use porthouse_proto::usbip::{self, Urb, DIR_IN, ISO_DESC_LEN, MAX_URB_DATA};
+use porthouse_proto::AttachInfo;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::{mpsc, watch, Notify};
 use tokio::task::AbortHandle;
@@ -52,8 +52,8 @@ impl Kind {
 
     pub fn product_name(self) -> &'static str {
         match self {
-            Kind::Mouse => "netusb virtual mouse",
-            Kind::Loopback => "netusb loopback device",
+            Kind::Mouse => "porthouse virtual mouse",
+            Kind::Loopback => "porthouse loopback device",
         }
     }
 
@@ -75,10 +75,10 @@ impl Kind {
         }
     }
 
-    pub fn speed_class(self) -> netusb_proto::Speed {
+    pub fn speed_class(self) -> porthouse_proto::Speed {
         match self {
-            Kind::Mouse => netusb_proto::Speed::Full,
-            Kind::Loopback => netusb_proto::Speed::High,
+            Kind::Mouse => porthouse_proto::Speed::Full,
+            Kind::Loopback => porthouse_proto::Speed::High,
         }
     }
 
@@ -157,7 +157,7 @@ fn utf16(text: &str) -> Vec<u8> {
 fn string_descriptor(kind: Kind, index: u8) -> Option<Vec<u8>> {
     let text = match index {
         0 => return Some(vec![4, 3, 0x09, 0x04]), // supported languages: US English
-        1 => "netusb",
+        1 => "porthouse",
         2 => kind.product_name(),
         3 => kind.serial(),
         // Microsoft OS string descriptor: "MSFT100" and the vendor request code. Only the loopback
@@ -495,7 +495,7 @@ async fn read_loop<R: AsyncRead + Unpin>(rd: &mut R, out: &mpsc::Sender<Reply>, 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use netusb_proto::usbip::{cmd_submit, cmd_unlink, DIR_OUT};
+    use porthouse_proto::usbip::{cmd_submit, cmd_unlink, DIR_OUT};
     use tokio::io::duplex;
 
     /// A client end driving a virtual device the way a kernel driver would.
@@ -675,7 +675,7 @@ mod tests {
         let (_, name) = d.control(get_descriptor(0x80, 3, 2, 255), 255).await;
         assert_eq!(
             String::from_utf16(&name[2..].chunks(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect::<Vec<_>>()).unwrap(),
-            "netusb virtual mouse"
+            "porthouse virtual mouse"
         );
         let (st, rep) = d.control(get_descriptor(0x81, 0x22, 0, 4096), 4096).await;
         assert_eq!((st, rep.len()), (0, 52));

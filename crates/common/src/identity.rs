@@ -27,7 +27,7 @@ pub fn hex(b: &[u8]) -> String {
 pub fn load_or_create(dir: &Path, name: &str) -> Result<Identity> {
     let path = dir.join(format!("{name}.pem"));
     if !path.exists() {
-        let ck = rcgen::generate_simple_self_signed(vec!["netusb".to_string()]).context("generating certificate")?;
+        let ck = rcgen::generate_simple_self_signed(vec!["porthouse".to_string()]).context("generating certificate")?;
         let pem = format!("{}{}", ck.cert.pem(), ck.signing_key.serialize_pem());
         write_private(&path, pem.as_bytes())?;
     }
@@ -69,7 +69,7 @@ mod tests {
 
     #[test]
     fn identity_is_created_once_and_reloaded_identically() {
-        let dir = std::env::temp_dir().join(format!("netusb-id-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("porthouse-id-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let a = load_or_create(&dir, "t").unwrap();
         let b = load_or_create(&dir, "t").unwrap();

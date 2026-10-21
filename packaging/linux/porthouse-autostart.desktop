@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Porthouse
+Comment=Keeps the Porthouse icon in the notification area
+Exec=porthouse --minimized
+Icon=porthouse
+Terminal=false
+X-GNOME-Autostart-enabled=true

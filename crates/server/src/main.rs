@@ -7,13 +7,13 @@ mod emulated;
 mod engine;
 
 use anyhow::{bail, Context, Result};
-use netusb_common::tls::{peer_fingerprint, server_config, session_binding};
-use netusb_common::trust::{self, PinFile, Role, TrustStore};
-use netusb_common::{identity, paths};
-use netusb_proto::{
+use nusb::MaybeFuture;
+use porthouse_common::tls::{peer_fingerprint, server_config, session_binding};
+use porthouse_common::trust::{self, PinFile, Role, TrustStore};
+use porthouse_common::{identity, paths};
+use porthouse_proto::{
     decode_frame, encode_frame, AttachInfo, ClientMsg, DeviceInfo, ServerMsg, Speed, DEFAULT_PORT, MDNS_SERVICE, PROTO_VERSION,
 };
-use nusb::MaybeFuture;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_rustls::TlsAcceptor;
@@ -39,7 +39,7 @@ impl Drop for Active<'_> {
 
 pub(crate) fn trace_on() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var_os("NETUSB_TRACE").is_some())
+    *ON.get_or_init(|| std::env::var_os("PORTHOUSE_TRACE").is_some())
 }
 
 struct Server {
@@ -61,7 +61,7 @@ fn hostname() -> String {
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .or_else(|| std::env::var("COMPUTERNAME").ok())
-        .unwrap_or_else(|| "netusb-host".into())
+        .unwrap_or_else(|| "porthouse-host".into())
 }
 
 fn server_id() -> String {
@@ -129,7 +129,7 @@ fn list_devices(srv: &Server) -> Result<Vec<DeviceInfo>> {
             product_id: kind.product_id(),
             class: 0,
             speed: kind.speed_class(),
-            manufacturer: Some("netusb".into()),
+            manufacturer: Some("porthouse".into()),
             product: Some(format!("{} (test device)", kind.product_name())),
             serial: Some(kind.serial().into()),
             in_use_by: in_use.get(kind.busid()).cloned(),
@@ -246,7 +246,7 @@ where
                         continue;
                     }
                     let Some(pin) = srv.pin.active() else {
-                        send(&mut sock, &err(7, "pairing is not open; run `netusb-server pair` on the server")).await?;
+                        send(&mut sock, &err(7, "pairing is not open; run `porthouse-server pair` on the server")).await?;
                         return Ok(());
                     };
                     if !trust::verify(&pin, &binding, Role::Client, &peer_fp, &proof) {
@@ -361,18 +361,18 @@ fn advertise(name: &str, id: &str, fp: &str, port: u16) -> Result<mdns_sd::Servi
 
 fn usage() {
     println!(
-        "netusb-server [run] [--port N] [--name NAME] [--no-mdns] [--test-device mouse|loopback]...   run the server
+        "porthouse-server [run] [--port N] [--name NAME] [--no-mdns] [--test-device mouse|loopback]...   run the server
                                                            (--test-device adds software test devices; the mouse moves the pointer of whoever attaches it)
-netusb-server pair                                         open a 10 minute pairing window and print its PIN
-netusb-server clients                                      list paired clients
-netusb-server revoke FINGERPRINT                           remove a paired client
+porthouse-server pair                                         open a 10 minute pairing window and print its PIN
+porthouse-server clients                                      list paired clients
+porthouse-server revoke FINGERPRINT                           remove a paired client
 
 pair, clients and revoke talk to the running service."
     );
 }
 
 async fn control(method: &str, params: serde_json::Value) -> Result<serde_json::Value> {
-    let mut c = netusb_ipc::Client::connect(netusb_ipc::Service::Server).await?;
+    let mut c = porthouse_ipc::Client::connect(porthouse_ipc::Service::Server).await?;
     c.call(method, params).await
 }
 
@@ -385,7 +385,7 @@ struct Handler {
     port: u16,
 }
 
-async fn handle(h: Arc<Handler>, req: netusb_ipc::Request) -> Result<serde_json::Value, String> {
+async fn handle(h: Arc<Handler>, req: porthouse_ipc::Request) -> Result<serde_json::Value, String> {
     use serde_json::json;
     let srv = &h.srv;
     match req.method.as_str() {
@@ -437,7 +437,7 @@ async fn main() -> Result<()> {
             let r = control("open_pairing", serde_json::Value::Null).await?;
             let status = control("status", serde_json::Value::Null).await?;
             println!(
-                "Pairing is open for 10 minutes. On the client run:\n\n    netusb-client pair <this-host>[:{DEFAULT_PORT}]\n\nand enter this PIN:  {}\n\nServer fingerprint: {}",
+                "Pairing is open for 10 minutes. On the client run:\n\n    porthouse-client pair <this-host>[:{DEFAULT_PORT}]\n\nand enter this PIN:  {}\n\nServer fingerprint: {}",
                 text(&r, "pin"),
                 text(&status, "fingerprint")
             );
@@ -455,13 +455,13 @@ async fn main() -> Result<()> {
             return Ok(());
         }
         Some("revoke") => {
-            let fp = args.get(1).context("usage: netusb-server revoke FINGERPRINT")?;
+            let fp = args.get(1).context("usage: porthouse-server revoke FINGERPRINT")?;
             let r = control("revoke", serde_json::json!({ "fingerprint": fp })).await?;
             println!("revoked {}", text(&r, "name"));
             return Ok(());
         }
         Some("-V") | Some("--version") => {
-            println!("netusb-server {}", env!("CARGO_PKG_VERSION"));
+            println!("porthouse-server {}", env!("CARGO_PKG_VERSION"));
             return Ok(());
         }
         Some("-h") | Some("--help") => {
@@ -472,9 +472,9 @@ async fn main() -> Result<()> {
         Some("service") => return windows_service_main(),
         #[cfg(windows)]
         Some("install-service") => {
-            netusb_common::winsvc::install(
+            porthouse_common::winsvc::install(
                 SERVICE_NAME,
-                "netusb server",
+                "Porthouse server",
                 "Shares this computer's USB devices with paired computers.",
                 &[],
             )?;
@@ -483,7 +483,7 @@ async fn main() -> Result<()> {
         }
         #[cfg(windows)]
         Some("uninstall-service") => {
-            netusb_common::winsvc::uninstall(SERVICE_NAME)?;
+            porthouse_common::winsvc::uninstall(SERVICE_NAME)?;
             println!("service {SERVICE_NAME} removed");
             return Ok(());
         }
@@ -494,18 +494,18 @@ async fn main() -> Result<()> {
     }
 
     let opts = parse_options(args)?;
-    serve_until(opts, netusb_common::shutdown::console_signal()).await
+    serve_until(opts, porthouse_common::shutdown::console_signal()).await
 }
 
 #[cfg(windows)]
-const SERVICE_NAME: &str = "netusb-server";
+const SERVICE_NAME: &str = "porthouse-server";
 
 #[cfg(windows)]
 fn windows_service_main() -> Result<()> {
     if let Ok(dir) = paths::state_dir() {
-        let _ = netusb_common::winsvc::log_to(&dir.join("server.log"));
+        let _ = porthouse_common::winsvc::log_to(&dir.join("server.log"));
     }
-    netusb_common::winsvc::dispatch(SERVICE_NAME, |stop| {
+    porthouse_common::winsvc::dispatch(SERVICE_NAME, |stop| {
         let opts = parse_options(Vec::new())?;
         tokio::runtime::Runtime::new()?.block_on(serve_until(opts, async {
             let _ = stop.await;
@@ -578,16 +578,20 @@ async fn serve_until(opts: Options, shutdown: impl std::future::Future<Output = 
     let listener = TcpListener::bind(("0.0.0.0", port))
         .await
         .with_context(|| format!("binding port {port}"))?;
-    eprintln!("netusb-server {} listening on :{port} as {:?}", env!("CARGO_PKG_VERSION"), srv.name);
+    eprintln!(
+        "porthouse-server {} listening on :{port} as {:?}",
+        env!("CARGO_PKG_VERSION"),
+        srv.name
+    );
     eprintln!("fingerprint {}", srv.fingerprint);
     if srv.authorized.entries().is_empty() {
-        eprintln!("no clients are paired yet; open a pairing window with `netusb-server pair` or from the netusb program");
+        eprintln!("no clients are paired yet; open a pairing window with `porthouse-server pair` or from the Porthouse program");
     }
 
     let control_srv = srv.clone();
     let handler = Arc::new(Handler { srv: control_srv, port });
     tokio::spawn(async move {
-        if let Err(e) = netusb_ipc::serve(netusb_ipc::Service::Server, move |req| handle(handler.clone(), req)).await {
+        if let Err(e) = porthouse_ipc::serve(porthouse_ipc::Service::Server, move |req| handle(handler.clone(), req)).await {
             eprintln!("control endpoint stopped: {e:#}");
         }
     });
@@ -610,7 +614,7 @@ async fn serve_until(opts: Options, shutdown: impl std::future::Future<Output = 
             accepted = listener.accept() => {
                 let (sock, peer) = accepted?;
                 let _ = sock.set_nodelay(true);
-                let _ = netusb_common::net::enable_keepalive(&sock);
+                let _ = porthouse_common::net::enable_keepalive(&sock);
                 let srv = srv.clone();
                 tokio::spawn(async move {
                     if let Err(e) = serve(sock, srv).await {

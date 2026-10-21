@@ -7,22 +7,22 @@ use tokio::net::{UnixListener, UnixStream};
 
 use crate::Service;
 
-const GROUP: &str = "netusb";
+const GROUP: &str = "porthouse";
 
 fn own_uid() -> u32 {
     std::fs::metadata("/proc/self").map(|m| m.uid()).unwrap_or(u32::MAX)
 }
 
 fn run_dir() -> PathBuf {
-    if let Some(d) = std::env::var_os("NETUSB_IPC_DIR") {
+    if let Some(d) = std::env::var_os("PORTHOUSE_IPC_DIR") {
         return PathBuf::from(d);
     }
     if own_uid() == 0 {
-        return PathBuf::from("/run/netusb");
+        return PathBuf::from("/run/porthouse");
     }
     match std::env::var_os("XDG_RUNTIME_DIR") {
-        Some(x) => PathBuf::from(x).join("netusb"),
-        None => PathBuf::from(format!("/tmp/netusb-{}", own_uid())),
+        Some(x) => PathBuf::from(x).join("porthouse"),
+        None => PathBuf::from(format!("/tmp/porthouse-{}", own_uid())),
     }
 }
 
@@ -32,12 +32,12 @@ fn socket_path(service: Service) -> PathBuf {
 
 fn candidates(service: Service) -> Vec<PathBuf> {
     let file = format!("{}.sock", service.name());
-    if let Some(d) = std::env::var_os("NETUSB_IPC_DIR") {
+    if let Some(d) = std::env::var_os("PORTHOUSE_IPC_DIR") {
         return vec![PathBuf::from(d).join(file)];
     }
-    let mut v = vec![PathBuf::from("/run/netusb").join(&file)];
+    let mut v = vec![PathBuf::from("/run/porthouse").join(&file)];
     if let Some(x) = std::env::var_os("XDG_RUNTIME_DIR") {
-        v.push(PathBuf::from(x).join("netusb").join(&file));
+        v.push(PathBuf::from(x).join("porthouse").join(&file));
     }
     v
 }
@@ -71,7 +71,7 @@ impl Listener {
             Ok(Some(stream))
         } else {
             // Say why, so the person can fix it instead of seeing a connection that just drops.
-            let reply = format!("{{\"id\":0,\"error\":\"not allowed to use this netusb service; add yourself to the `{GROUP}` group and sign in again\"}}\n");
+            let reply = format!("{{\"id\":0,\"error\":\"not allowed to use this Porthouse service; add yourself to the `{GROUP}` group and sign in again\"}}\n");
             let _ = stream.try_write(reply.as_bytes());
             Ok(None)
         }
@@ -131,11 +131,11 @@ pub(crate) async fn connect(service: Service) -> Result<(Box<dyn AsyncRead + Unp
     match last {
         Some((path, e)) if e.kind() == std::io::ErrorKind::PermissionDenied => {
             bail!(
-                "not allowed to use the netusb {} service ({}); add yourself to the `netusb` group",
+                "not allowed to use the Porthouse {} service ({}); add yourself to the `porthouse` group",
                 service.name(),
                 path.display()
             )
         }
-        _ => bail!("the netusb {} service is not running", service.name()),
+        _ => bail!("the Porthouse {} service is not running", service.name()),
     }
 }

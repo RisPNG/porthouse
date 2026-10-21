@@ -1,4 +1,4 @@
-# Real attach on Windows: installs the usbip-win2 driver, then attaches netusb's virtual mouse
+# Real attach on Windows: installs the usbip-win2 driver, then attaches porthouse's virtual mouse
 # through it and checks that Windows enumerates the device and that the pointer moves.
 param([string]$Bin = "$PWD\target\release")
 $ErrorActionPreference = 'Stop'
@@ -8,7 +8,7 @@ New-Item -ItemType Directory -Force -Path $work | Out-Null
 $port = 7600
 function Show-Usb {
     Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue |
-        Where-Object { $_.InstanceId -like 'USB\VID_1209*' -or $_.InstanceId -like 'ROOT\USBIP*' -or $_.FriendlyName -like '*USBip*' -or $_.FriendlyName -like '*netusb*' } |
+        Where-Object { $_.InstanceId -like 'USB\VID_1209*' -or $_.InstanceId -like 'ROOT\USBIP*' -or $_.FriendlyName -like '*USBip*' -or $_.FriendlyName -like '*porthouse*' } |
         Format-List Status, Class, FriendlyName, InstanceId | Out-String | Write-Host
 }
 

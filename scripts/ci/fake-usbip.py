@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Stand-in for usbip-win2's usbip.exe that plays the kernel driver, exercising a netusb server's
+"""Stand-in for usbip-win2's usbip.exe that plays the kernel driver, exercising a porthouse server's
 USB engine with real URBs against the loopback test device (VID 1209, PID 0002).
 
-Command line compatible with what netusb-client runs:
+Command line compatible with what porthouse-client runs:
     fake-usbip.py --tcp-port P attach -r 127.0.0.1 -b TOKEN --once --terse
     fake-usbip.py detach -p N
 Results go to $FAKE_OUT/results.txt, and $FAKE_OUT/done appears when the exercise has finished.

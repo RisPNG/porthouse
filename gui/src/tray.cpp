@@ -61,7 +61,7 @@ QIcon Tray::icon(const Theme *theme, bool active) {
 Tray::Tray(Theme *theme, ControlLink *client, ControlLink *server, QObject *parent)
     : QObject(parent), m_theme(theme), m_client(client), m_server(server) {
     m_menu = new QMenu();
-    QAction *open = m_menu->addAction(tr("Open netusb"));
+    QAction *open = m_menu->addAction(tr("Open Porthouse"));
     m_menu->addSeparator();
     m_usingLine = m_menu->addAction(QString());
     m_usingLine->setEnabled(false);
@@ -118,5 +118,5 @@ void Tray::update() {
     m_usingLine->setText(usingText);
     m_sharingLine->setText(sharingText);
     m_icon.setIcon(icon(m_theme, used > 0 || shared > 0));
-    m_icon.setToolTip(QStringLiteral("netusb\n%1\n%2").arg(usingText, sharingText));
+    m_icon.setToolTip(QStringLiteral("Porthouse\n%1\n%2").arg(usingText, sharingText));
 }

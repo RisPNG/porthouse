@@ -27,9 +27,9 @@ jobs:
         with:
           name: windows-programs
           path: |
-            target/release/netusb-server.exe
-            target/release/netusb-clientd.exe
-            target/release/netusb-client.exe
+            target/release/porthouse-server.exe
+            target/release/porthouse-clientd.exe
+            target/release/porthouse-client.exe
           if-no-files-found: error
 
   attach:
@@ -61,9 +61,11 @@ jobs:
         run: ./scripts/ci/windows-chain.ps1
 
   installer:
-    name: installer (build the program, package, install, use, remove)
+    name: installer (build the program, package, sign, install, use, remove)
     needs: rust
     runs-on: windows-2022
+    env:
+      SIGN: ${{ secrets.SIGNPATH_API_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -89,11 +91,36 @@ jobs:
       - name: build the installer
         shell: pwsh
         run: ./scripts/package-windows.ps1 -GuiBuild build\gui
+      - id: unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer-unsigned
+          path: dist/porthouse-*-windows-x64-setup.exe
+          if-no-files-found: error
+      - name: sign the installer with SignPath
+        if: env.SIGN == 'true'
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: dist/signed
+      - name: use the signed installer from here on
+        if: env.SIGN == 'true'
+        shell: pwsh
+        run: |
+          Copy-Item dist\signed\*.exe dist\ -Force
+          $sig = Get-AuthenticodeSignature (Get-ChildItem dist\porthouse-*-windows-x64-setup.exe).FullName
+          Write-Host "signature status: $($sig.Status), signer: $($sig.SignerCertificate.Subject)"
+          if ($sig.Status -ne 'Valid') { throw 'the installer is not validly signed' }
       - name: install, use, remove
         shell: pwsh
-        run: ./scripts/ci/windows-installer.ps1 -Setup (Get-ChildItem dist\netusb-*-windows-x64-setup.exe).FullName
+        run: ./scripts/ci/windows-installer.ps1 -Setup (Get-ChildItem dist\porthouse-*-windows-x64-setup.exe).FullName
       - uses: actions/upload-artifact@v4
         with:
           name: windows-installer
-          path: dist/netusb-*-windows-x64-setup.exe
+          path: dist/porthouse-*-windows-x64-setup.exe
           if-no-files-found: error

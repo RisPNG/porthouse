@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 pub fn state_dir() -> std::io::Result<PathBuf> {
-    let dir = match std::env::var_os("NETUSB_STATE_DIR") {
+    let dir = match std::env::var_os("PORTHOUSE_STATE_DIR") {
         Some(d) => PathBuf::from(d),
         None => default_dir()?,
     };
@@ -19,16 +19,16 @@ fn default_dir() -> std::io::Result<PathBuf> {
     use std::os::unix::fs::MetadataExt;
     let root = std::fs::metadata("/proc/self").map(|m| m.uid() == 0).unwrap_or(false);
     if root {
-        return Ok(PathBuf::from("/var/lib/netusb"));
+        return Ok(PathBuf::from("/var/lib/porthouse"));
     }
     if let Some(x) = std::env::var_os("XDG_STATE_HOME") {
-        return Ok(PathBuf::from(x).join("netusb"));
+        return Ok(PathBuf::from(x).join("porthouse"));
     }
     match std::env::var_os("HOME") {
-        Some(h) => Ok(PathBuf::from(h).join(".local/state/netusb")),
+        Some(h) => Ok(PathBuf::from(h).join(".local/state/porthouse")),
         None => Err(std::io::Error::new(
             std::io::ErrorKind::NotFound,
-            "cannot determine a state directory; set NETUSB_STATE_DIR",
+            "cannot determine a state directory; set PORTHOUSE_STATE_DIR",
         )),
     }
 }
@@ -36,10 +36,10 @@ fn default_dir() -> std::io::Result<PathBuf> {
 #[cfg(windows)]
 fn default_dir() -> std::io::Result<PathBuf> {
     match std::env::var_os("ProgramData") {
-        Some(d) => Ok(PathBuf::from(d).join("netusb")),
+        Some(d) => Ok(PathBuf::from(d).join("porthouse")),
         None => Err(std::io::Error::new(
             std::io::ErrorKind::NotFound,
-            "cannot determine a state directory; set NETUSB_STATE_DIR",
+            "cannot determine a state directory; set PORTHOUSE_STATE_DIR",
         )),
     }
 }

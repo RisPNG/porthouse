@@ -28,6 +28,7 @@ jobs:
   windows:
     needs: check
     uses: ./.github/workflows/windows.yml
+    secrets: inherit
 
   publish:
     needs: [packages, windows]
@@ -39,14 +40,40 @@ jobs:
           path: assets
           pattern: '{package-*,windows-installer}'
           merge-multiple: true
+      - name: import the signing key
+        id: key
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          if [ -z "$GPG_PRIVATE_KEY" ]; then echo "no signing key is configured, the assets will not be signed"; exit 0; fi
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          printf '%s' "$GPG_PASSPHRASE" > "$RUNNER_TEMP/passphrase"
+          echo "id=$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr/{print $10; exit}')" >> "$GITHUB_OUTPUT"
+      - name: sign the rpm packages
+        if: steps.key.outputs.id != ''
+        run: |
+          sudo apt-get install -y rpm >/dev/null
+          for f in assets/*.rpm; do
+            rpmsign --define "_gpg_name ${{ steps.key.outputs.id }}" \
+              --define "__gpg_sign_cmd %{__gpg} gpg --batch --no-verbose --no-armor --pinentry-mode loopback --passphrase-file $RUNNER_TEMP/passphrase --no-secmem-warning -u %{_gpg_name} -sbo %{__signature_filename} --digest-algo sha256 %{__plaintext_filename}" \
+              --addsign "$f"
+          done
       - name: checksums and notes
         run: |
           V=${GITHUB_REF_NAME#v}
-          mv assets/netusb.flatpak "assets/netusb-$V-x86_64.flatpak"
-          (cd assets && sha256sum netusb* > SHA256SUMS && cat SHA256SUMS)
+          mv assets/porthouse.flatpak "assets/porthouse-$V-x86_64.flatpak"
+          (cd assets && sha256sum porthouse* > SHA256SUMS && cat SHA256SUMS)
           awk -v v="$V" '$0 ~ "^## " v " " {f=1; next} f && /^## / {exit} f' CHANGELOG.md > notes.md
           cat notes.md
+      - name: sign every asset
+        if: steps.key.outputs.id != ''
+        run: |
+          for f in assets/*; do
+            gpg --batch --yes --pinentry-mode loopback --passphrase-file "$RUNNER_TEMP/passphrase" --local-user "${{ steps.key.outputs.id }}" --armor --detach-sign "$f"
+          done
+          rm -f "$RUNNER_TEMP/passphrase"
       - name: publish the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" assets/* --title "netusb ${GITHUB_REF_NAME#v}" --notes-file notes.md
+        run: gh release create "$GITHUB_REF_NAME" assets/* --title "porthouse ${GITHUB_REF_NAME#v}" --notes-file notes.md

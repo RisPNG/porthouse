@@ -1,76 +1,66 @@
-# netusb
+# Porthouse
 
-Use a USB device that is plugged into another computer as if it were plugged into yours.
+Plug a USB device into one computer and use it on another, as if it were plugged in right there. Think of it as a port house for your USB ports: each computer keeps its ports, and any of them can be reached from the others.
 
-Plug a mouse, keyboard, serial adapter, flash drive, licence dongle, or programmer into one computer and use it from another over your network. The computer that has the device shares it, and the computer that wants it uses it. Both work on Linux and Windows, everything is encrypted, and a new computer has to be approved with a one-time PIN.
+> [!IMPORTANT]  
+> This project is entirely "vibe-coded". Which means maintenance are not guaranteed as it was made only for my own convenience.
+> 
+> You can still submit issues and pull requests, but I won't promise to work on them or review them. If anything, it is better that you fork the project instead.
+> 
+> Although I believe that I provide meaningful research, direction, engineering, and architecture as an experienced developer in guiding it during the development of this project, I am aware that this project is not something exclusive to me. I am confident that anyone, with enough time and determination, can develop a similar or better project that can serve the same purpose. That is not to say I am pointing the blame to the AI if anything do goes wrong in the result of this project. That responsibility still is entirely on me and to each of you that uses it. Please do your own due diligence. Thank you for understanding.
 
-- A device moves, it is not copied. While one computer uses it, the other does not have it. Release it and it returns on its own.
-- There is no cloud and no account. Computers talk directly to each other.
-- It is safe by default: TLS 1.3 with pinned certificates, PIN pairing, and a device is handed back if the other computer disappears.
+## What can you do with it?
 
-netusb is made of two background services and a program. The server service shares this computer's devices. The client service plugs in devices that other computers share. The netusb program has a window and a notification-area icon for both, so there is nothing to run by hand.
+- Use the mouse or keyboard that is plugged into your Linux computer on your Windows PC, and move it back whenever you like.
+- Reach a serial adapter, flash drive, licence dongle, or programmer that is plugged into a computer in another room.
+- Share a device between a laptop and a desktop without moving cables.
+
+A device moves, it does not get copied. While one computer uses it, the other does not have it. Release it and it goes back on its own, and it also goes back if the computer using it disappears. There is no cloud and no account. Computers talk directly to each other, and everything is encrypted.
 
 ## Install
 
-Download the file for your system from the Releases page.
+Download the file for your system from the [Releases page](https://github.com/RisPNG/porthouse/releases/latest).
 
-| System | File | How |
+| Your system | Download | Then |
 |---|---|---|
-| Debian 12 or 13, Ubuntu 24.04 | `netusb-<system>-<version>-amd64.deb` | `sudo apt install ./netusb-*.deb` |
-| Fedora 43 | `netusb-fedora-43-<version>-x86_64.rpm` | `sudo dnf install ./netusb-*.rpm` |
-| Arch Linux | `PKGBUILD` in `packaging/arch` | `makepkg -si` in that directory |
-| Any Linux, program only | `netusb-<version>-x86_64.flatpak` | `flatpak install netusb-*.flatpak` |
-| Windows 10 or 11 (x64) | `netusb-<version>-windows-x64-setup.exe` | run it |
+| Windows 10 or 11 | `porthouse-<version>-windows-x64-setup.exe` | run it |
+| Ubuntu 24.04, Debian 12 or 13 | `porthouse-<system>-<version>-amd64.deb` | `sudo apt install ./porthouse-*.deb` |
+| Fedora 43 | `porthouse-fedora-43-<version>-x86_64.rpm` | `sudo dnf install ./porthouse-*.rpm` |
+| Arch Linux | `PKGBUILD` from [packaging/arch](packaging/arch) | `makepkg -si` in that folder, then `sudo systemctl enable --now porthouse-server porthouse-client` |
+| Any Linux, program only | `porthouse-<version>-x86_64.flatpak` | `flatpak install porthouse-*.flatpak` (install one of the packages above as well, because the Flatpak is only the window) |
 
-The Linux packages start both services and add the program to the application menu. The Windows installer asks which parts to install, installs the usbip-win2 driver when this computer will use devices, opens the firewall for sharing, and starts the services. The installer is not code signed yet, so Windows SmartScreen asks for confirmation.
-
-The Flatpak contains only the program. The services run on the host, so install one of the packages too. On Arch the services are installed but not started: run `sudo systemctl enable --now netusb-server netusb-client`.
+Both Linux and Windows installs start everything for you and add Porthouse to your applications. The Windows installer asks what you want to do on that PC and installs the USB/IP driver it needs when you want to use devices from other computers. See [how to check your download](docs/verifying-downloads.md) if you like to verify what you run. Windows shows a SmartScreen warning for installers that are not signed.
 
 ## Use it
 
-1. On the computer that has the device, open netusb, go to Share devices, and press Allow a new computer to pair. A PIN appears.
-2. On the computer that wants the device, open netusb. If the other computer is not listed, add it by address. Press Pair next to it and enter the PIN.
-3. Press Use next to the device. Press Release to give it back.
+1. On the computer that has the device, open Porthouse, go to Share devices, and press Allow a new computer to pair. A PIN appears.
+2. On the computer that should use the device, open Porthouse. If the other computer is not listed, add it by its address. Press Pair next to it and type the PIN.
+3. Press Use next to the device. Press Release when you are done.
 
-On Linux, anyone signed in at the computer can use the program. Other accounts need to be in the `netusb` group: `sudo usermod -aG netusb USER`, then sign in again.
+Porthouse keeps a small icon in your notification area so you can see what is in use at a glance. Closing the window does not stop anything.
 
-### Walkthroughs
+Step by step guides:
 
-| You want to | Read |
-|---|---|
-| Share a Linux computer's mouse or keyboard with a Windows PC | [docs/linux-to-windows.md](docs/linux-to-windows.md) |
-| Use a device from one Linux computer on another | [docs/linux-to-linux.md](docs/linux-to-linux.md) |
-| Use a device plugged into a Windows PC from Linux | [docs/windows-to-linux.md](docs/windows-to-linux.md) |
-| Fix something that does not work, or a device stuck on the wrong computer | [docs/troubleshooting.md](docs/troubleshooting.md) |
+- [Share a Linux computer's mouse or keyboard with a Windows PC](docs/linux-to-windows.md)
+- [Use a device from one Linux computer on another](docs/linux-to-linux.md)
+- [Use a device plugged into a Windows PC from Linux](docs/windows-to-linux.md)
+- [Something does not work](docs/troubleshooting.md)
 
-There is also a command line, `netusb-client` and `netusb-server`, for scripts and servers without a screen.
+## Good to know
 
-## Security in brief
+- Anyone you pair with can use any shareable device on that computer, including its keyboard and mouse. Only pair computers you control.
+- Porthouse listens on TCP port 7600. Allow it in your firewall for your own network only, and never expose it to the internet. [SECURITY.md](SECURITY.md) has the details.
+- Mice, keyboards, game controllers, serial adapters, storage, dongles, and programmers work. Webcams and USB audio do not, because they need a kind of transfer that is not supported.
+- Sharing from a Windows PC only works for devices that use the WinUSB driver, see [that guide](docs/windows-to-linux.md).
+- There is no macOS version, and no ready-made package for ARM or openSUSE yet.
+- It has been tested a lot with software test devices and real drivers on every change, and by hand with a physical mouse. It has not been tested on many different physical devices, or with the Windows client on a desktop edition of Windows.
 
-Anyone you pair with can use any shareable device on that server, including your keyboard and mouse, so only pair computers you control. The server listens on TCP port 7600 on all interfaces. Restrict it with your firewall to networks you trust and never expose it to the internet. The details, and how to report a problem, are in [SECURITY.md](SECURITY.md) and [docs/how-it-works.md](docs/how-it-works.md).
+## For developers
 
-## What works and what does not yet
-
-| | |
-|---|---|
-| Mice, keyboards, game controllers, serial adapters, storage, dongles, programmers | works |
-| Webcams, USB audio, and anything else that needs isochronous transfers | not supported |
-| Sharing from Windows | the device has to use the WinUSB driver, see [docs/windows-to-linux.md](docs/windows-to-linux.md) |
-| Using a device on Windows | needs the usbip-win2 driver, which the installer adds |
-| macOS | not available |
-| Linux on ARM | not packaged yet, build it yourself with [docs/building.md](docs/building.md) |
-| openSUSE | no package yet |
-
-How well is it tested? Every change runs on real Windows and Linux machines in continuous integration with the real kernel drivers and software test devices. That covers attaching a virtual mouse and watching the pointer move, sharing a device through the Windows and Linux engines, installing every package on a clean system, installing and removing the Windows services, and attacking the pairing. By hand, a physical mouse was passed through the Linux kernel's virtual USB controller on one machine, and the Windows server was used from Linux against a real Windows desktop over a VPN. Not covered yet: the Windows client on a desktop edition of Windows, because CI uses Windows Server 2022, moving a physical mouse between two separate computers, and a wide range of physical devices. Details are in [docs/how-it-works.md](docs/how-it-works.md#testing).
-
-## More
-
-- [docs/how-it-works.md](docs/how-it-works.md) covers the architecture, protocol, security model, and testing.
-- [docs/building.md](docs/building.md) covers building from source, running the tests, and making a release.
-- [CHANGELOG.md](CHANGELOG.md) lists what changed.
+How it works inside, how to build it, how it is tested, and how releases are made are in [dev/README.md](dev/README.md). The list of changes is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Licence
 
 Dual licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option.
 
-netusb uses the public USB/IP protocol format and, on Windows, the third-party usbip-win2 driver, which is BSD-2-Clause licensed.
+Porthouse uses the public USB/IP protocol format and, on Windows, the third-party usbip-win2 driver, which is BSD-2-Clause licensed.

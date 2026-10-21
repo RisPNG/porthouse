@@ -4,13 +4,13 @@ use std::task::Poll;
 use std::time::Duration;
 
 use anyhow::{anyhow, Result};
-use netusb_proto::usbip::{self, Urb, DIR_IN, ISO_DESC_LEN, MAX_URB_DATA};
 use nusb::descriptors::TransferType;
 use nusb::transfer::{
     Buffer, Bulk, BulkOrInterrupt, ControlIn, ControlOut, ControlType, Direction, EndpointDirection, In, Interrupt, Out, Recipient,
     TransferError,
 };
 use nusb::{Device, Endpoint, Interface};
+use porthouse_proto::usbip::{self, Urb, DIR_IN, ISO_DESC_LEN, MAX_URB_DATA};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::{mpsc, oneshot, watch};
 
@@ -357,7 +357,7 @@ impl Session {
 /// Journal of devices whose kernel drivers this process detached. If the process dies without
 /// cleaning up, the next start restores them so a hard kill cannot leave an input device dead.
 fn journal_path() -> std::path::PathBuf {
-    netusb_common::paths::state_dir()
+    porthouse_common::paths::state_dir()
         .unwrap_or_else(|_| std::env::temp_dir())
         .join("claimed-devices")
 }

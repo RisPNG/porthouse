@@ -172,9 +172,9 @@ mod tests {
 
     #[tokio::test]
     async fn round_trip_and_errors() {
-        let dir = std::env::temp_dir().join(format!("netusb-ipc-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("porthouse-ipc-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        std::env::set_var("NETUSB_IPC_DIR", &dir);
+        std::env::set_var("PORTHOUSE_IPC_DIR", &dir);
         tokio::spawn(serve(Service::Client, |req| async move {
             match req.method.as_str() {
                 "echo" => Ok(req.params),

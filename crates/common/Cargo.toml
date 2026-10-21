@@ -1,5 +1,5 @@
 [package]
-name = "netusb-common"
+name = "porthouse-common"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

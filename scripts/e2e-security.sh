@@ -8,7 +8,7 @@
 set -u
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 . "$ROOT/scripts/lib.sh"
-W=$(mktemp -d /tmp/netusb-e2e.XXXXXX)
+W=$(mktemp -d /tmp/porthouse-e2e.XXXXXX)
 PORT=7650; RELAY=7651
 PASS=0; FAIL=0
 SPID=""; RPID=""; D1=""; D2=""
@@ -30,9 +30,9 @@ c1()   { cl "$C1" "$@"; }
 c2()   { cl "$C2" "$@"; }
 pin_of() { cat "$S/pairing.pin" 2>/dev/null | head -1; }
 
-NETUSB_STATE_DIR=$S NETUSB_IPC_DIR=$S/ipc "$SRV" run --no-mdns --port $PORT > "$W/server.log" 2>&1 & SPID=$!
-NETUSB_STATE_DIR=$C1 NETUSB_IPC_DIR=$C1/ipc "$CLID" run > "$W/c1d.log" 2>&1 & D1=$!
-NETUSB_STATE_DIR=$C2 NETUSB_IPC_DIR=$C2/ipc "$CLID" run > "$W/c2d.log" 2>&1 & D2=$!
+PORTHOUSE_STATE_DIR=$S PORTHOUSE_IPC_DIR=$S/ipc "$SRV" run --no-mdns --port $PORT > "$W/server.log" 2>&1 & SPID=$!
+PORTHOUSE_STATE_DIR=$C1 PORTHOUSE_IPC_DIR=$C1/ipc "$CLID" run > "$W/c1d.log" 2>&1 & D1=$!
+PORTHOUSE_STATE_DIR=$C2 PORTHOUSE_IPC_DIR=$C2/ipc "$CLID" run > "$W/c2d.log" 2>&1 & D2=$!
 wait_service "$S" server && wait_service "$C1" client && wait_service "$C2" client || exit 1
 c1 add 127.0.0.1:$PORT; c2 add 127.0.0.1:$PORT
 echo "== server started; pairing is closed until someone opens it =="
@@ -86,7 +86,7 @@ while True:
     c, _ = ls.accept()
     try:
         cs = sctx.wrap_socket(c, server_side=True)
-        up = cctx.wrap_socket(socket.create_connection(("127.0.0.1", $PORT)), server_hostname="netusb")
+        up = cctx.wrap_socket(socket.create_connection(("127.0.0.1", $PORT)), server_hostname="porthouse")
     except Exception as e:
         continue
     threading.Thread(target=pump, args=(cs, up), daemon=True).start()
@@ -110,7 +110,7 @@ expect_ok   "revoked client is no longer paired" "127.0.0.1:$PORT\\)  not paired
 echo "== client pins the server =="
 # Replace the server's identity: the paired client must refuse the new certificate.
 kill $SPID; wait $SPID 2>/dev/null; rm -f "$S/server.pem"
-NETUSB_STATE_DIR=$S NETUSB_IPC_DIR=$S/ipc "$SRV" run --no-mdns --port $PORT > "$W/server2.log" 2>&1 & SPID=$!
+PORTHOUSE_STATE_DIR=$S PORTHOUSE_IPC_DIR=$S/ipc "$SRV" run --no-mdns --port $PORT > "$W/server2.log" 2>&1 & SPID=$!
 wait_service "$S" server
 expect_fail "client refuses a server whose certificate changed" "not a paired server" c1 use 127.0.0.1:$PORT 99-1
 

@@ -6,11 +6,11 @@ pub mod usbip_tool;
 pub mod vhci;
 
 use anyhow::{bail, Context, Result};
-use netusb_common::identity::{self, Identity};
-use netusb_common::paths;
-use netusb_common::tls::{client_config, peer_fingerprint, server_name, session_binding};
-use netusb_common::trust::{self, Role, TrustStore};
-use netusb_proto::{decode_frame, encode_frame, AttachInfo, ClientMsg, ServerMsg, DEFAULT_PORT, PROTO_VERSION};
+use porthouse_common::identity::{self, Identity};
+use porthouse_common::paths;
+use porthouse_common::tls::{client_config, peer_fingerprint, server_name, session_binding};
+use porthouse_common::trust::{self, Role, TrustStore};
+use porthouse_proto::{decode_frame, encode_frame, AttachInfo, ClientMsg, ServerMsg, DEFAULT_PORT, PROTO_VERSION};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio_rustls::client::TlsStream;
@@ -55,7 +55,7 @@ impl Conn {
             .with_context(|| format!("timed out connecting to {addr}"))?
             .with_context(|| format!("connecting to {addr}"))?;
         tcp.set_nodelay(true)?;
-        let _ = netusb_common::net::enable_keepalive(&tcp);
+        let _ = porthouse_common::net::enable_keepalive(&tcp);
         let sock = tokio::time::timeout(Duration::from_secs(10), ctx.connector.connect(server_name(), tcp))
             .await
             .context("TLS handshake timed out")?
@@ -126,7 +126,7 @@ pub fn whoami() -> String {
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .or_else(|| std::env::var("COMPUTERNAME").ok())
-        .unwrap_or_else(|| "netusb-client".into())
+        .unwrap_or_else(|| "porthouse-client".into())
 }
 
 pub fn with_default_port(h: String) -> String {

@@ -1,4 +1,4 @@
-//! netusb control-plane protocol.
+//! porthouse control-plane protocol.
 //!
 //! Frame layout (all integers little-endian):
 //!
@@ -15,7 +15,7 @@ pub mod usbip;
 
 pub const PROTO_VERSION: u16 = 4;
 pub const DEFAULT_PORT: u16 = 7600;
-pub const MDNS_SERVICE: &str = "_netusb._tcp.local.";
+pub const MDNS_SERVICE: &str = "_porthouse._tcp.local.";
 
 pub const MAX_FRAME: usize = 16 * 1024 * 1024;
 pub const COMPRESS_THRESHOLD: usize = 512;

@@ -14,7 +14,7 @@ set -u
 BUSID=${1:-5-1}
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 . "$ROOT/scripts/lib.sh"
-W=$(mktemp -d /tmp/netusb-winpath.XXXXXX)
+W=$(mktemp -d /tmp/porthouse-winpath.XXXXXX)
 PORT=7695
 SP=""; CP=""
 BUS=${BUSID%%-*}
@@ -97,8 +97,8 @@ while s.recv(4096): pass          # like the driver: stay until the connection g
 EOF
 chmod +x "$W/fake-usbip"
 
-NETUSB_STATE_DIR=$W/s NETUSB_IPC_DIR=$W/s/ipc "$SRV" run --no-mdns --port $PORT > "$W/server.log" 2>&1 & SP=$!
-FAKE_OUT=$W/out NETUSB_STATE_DIR=$W/c NETUSB_IPC_DIR=$W/c/ipc "$CLID" run --importer "$W/fake-usbip" > "$W/client.log" 2>&1 & CP=$!
+PORTHOUSE_STATE_DIR=$W/s PORTHOUSE_IPC_DIR=$W/s/ipc "$SRV" run --no-mdns --port $PORT > "$W/server.log" 2>&1 & SP=$!
+FAKE_OUT=$W/out PORTHOUSE_STATE_DIR=$W/c PORTHOUSE_IPC_DIR=$W/c/ipc "$CLID" run --importer "$W/fake-usbip" > "$W/client.log" 2>&1 & CP=$!
 wait_service "$W/s" server && wait_service "$W/c" client || exit 1
 PIN=$(sv "$W/s" pair | pin_from)
 cl "$W/c" pair 127.0.0.1:$PORT --pin "$PIN" > /dev/null || { echo "pairing failed"; exit 1; }
@@ -136,7 +136,7 @@ want = sys.argv[2]
 sysvid = int(open(f"/sys/bus/usb/devices/{want}/idVendor").read(), 16)
 syspid = int(open(f"/sys/bus/usb/devices/{want}/idProduct").read(), 16)
 # The reply must echo the (secret) bus id the importer requested; the real one is only in `path`.
-assert busid.startswith("nu") and path == f"netusb/{want}" and (vid, pid) == (sysvid, syspid), (busid, path, vid, pid)
+assert busid.startswith("nu") and path == f"porthouse/{want}" and (vid, pid) == (sysvid, syspid), (busid, path, vid, pid)
 EOF
 
 echo "== release =="

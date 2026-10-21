@@ -49,7 +49,7 @@ Dialog {
 
         Text {
             Layout.fillWidth: true
-            text: qsTr("On that computer, open netusb and press “Allow a new computer to pair”, or run “netusb-server pair”. Enter the PIN it shows.")
+            text: qsTr("On that computer, open Porthouse and press “Allow a new computer to pair”, or run “porthouse-server pair”. Enter the PIN it shows.")
             color: theme.textMuted
             font.pixelSize: 13
             wrapMode: Text.WordWrap

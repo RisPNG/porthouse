@@ -1,5 +1,5 @@
 [package]
-name = "netusb-server"
+name = "porthouse-server"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,9 +8,9 @@ license.workspace = true
 anyhow = "1.0.104"
 serde_json = "1.0.154"
 mdns-sd = "0.21.6"
-netusb-common = { path = "../common" }
-netusb-ipc = { path = "../ipc" }
-netusb-proto = { path = "../proto" }
+porthouse-common = { path = "../common" }
+porthouse-ipc = { path = "../ipc" }
+porthouse-proto = { path = "../proto" }
 nusb = { version = "0.2.8", features = ["tokio"] }
 rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
 tokio = { version = "1.54.0", features = ["full"] }

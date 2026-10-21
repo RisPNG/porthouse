@@ -15,7 +15,7 @@ use rustls::{ClientConfig, DigitallySignedStruct, DistinguishedName, Error, Serv
 
 use crate::identity::{fingerprint, Identity};
 
-pub const EXPORTER_LABEL: &[u8] = b"EXPORTER-netusb-pairing";
+pub const EXPORTER_LABEL: &[u8] = b"EXPORTER-porthouse-pairing";
 
 fn provider() -> Arc<CryptoProvider> {
     Arc::new(ring::default_provider())
@@ -121,5 +121,5 @@ pub fn session_binding<D>(conn: &rustls::ConnectionCommon<D>) -> Result<[u8; 32]
 }
 
 pub fn server_name() -> ServerName<'static> {
-    ServerName::try_from("netusb").expect("static name is valid")
+    ServerName::try_from("porthouse").expect("static name is valid")
 }

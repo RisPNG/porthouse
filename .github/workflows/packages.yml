@@ -21,14 +21,14 @@ jobs:
           rustup target add x86_64-unknown-linux-musl
           sudo apt-get update -y >/dev/null
           sudo apt-get install -y musl-tools >/dev/null
-          cargo build --release --locked --target x86_64-unknown-linux-musl -p netusb-server -p netusb-client
+          cargo build --release --locked --target x86_64-unknown-linux-musl -p porthouse-server -p porthouse-client
       - uses: actions/upload-artifact@v4
         with:
           name: linux-programs
           path: |
-            target/x86_64-unknown-linux-musl/release/netusb-server
-            target/x86_64-unknown-linux-musl/release/netusb-clientd
-            target/x86_64-unknown-linux-musl/release/netusb-client
+            target/x86_64-unknown-linux-musl/release/porthouse-server
+            target/x86_64-unknown-linux-musl/release/porthouse-clientd
+            target/x86_64-unknown-linux-musl/release/porthouse-client
           if-no-files-found: error
 
   build:
@@ -80,15 +80,15 @@ jobs:
         run: |
           chmod +x target/x86_64-unknown-linux-musl/release/*
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
-            -DNETUSB_PACKAGE_FLAVOR=${{ matrix.flavor }} \
-            -DNETUSB_DEB_DEPENDS="${{ matrix.depends }}" -DNETUSB_RPM_REQUIRES="${{ matrix.depends }}"
+            -DPORTHOUSE_PACKAGE_FLAVOR=${{ matrix.flavor }} \
+            -DPORTHOUSE_DEB_DEPENDS="${{ matrix.depends }}" -DPORTHOUSE_RPM_REQUIRES="${{ matrix.depends }}"
           cmake --build build
           QT_QPA_PLATFORM=offscreen ctest --test-dir build --output-on-failure
       - name: package
         run: |
           cd build
           if [ "${{ matrix.kind }}" = deb ]; then cpack -G DEB; else cpack -G RPM; fi
-          ls -l netusb-*
+          ls -l porthouse-*
       - uses: actions/upload-artifact@v4
         with:
           name: package-${{ matrix.flavor }}
@@ -163,15 +163,15 @@ jobs:
           VERSION=$(sed -n 's/^pkgver=//p' packaging/arch/PKGBUILD)
           git config --global --add safe.directory "$PWD"
           mkdir -p /home/builder/pkg
-          git archive --prefix="netusb-$VERSION/" -o "/home/builder/pkg/netusb-$VERSION.tar.gz" HEAD
-          cp packaging/arch/netusb.install /home/builder/pkg/
-          sed 's|^source=.*|source=("netusb-$pkgver.tar.gz")|' packaging/arch/PKGBUILD > /home/builder/pkg/PKGBUILD
+          git archive --prefix="porthouse-$VERSION/" -o "/home/builder/pkg/porthouse-$VERSION.tar.gz" HEAD
+          cp packaging/arch/porthouse.install /home/builder/pkg/
+          sed 's|^source=.*|source=("porthouse-$pkgver.tar.gz")|' packaging/arch/PKGBUILD > /home/builder/pkg/PKGBUILD
           chown -R builder /home/builder/pkg
           su builder -c 'cd /home/builder/pkg && makepkg --noconfirm --nodeps'
           ls -l /home/builder/pkg/*.pkg.tar.zst
       - name: install it and run the checks
         run: |
-          pacman -U --noconfirm /home/builder/pkg/netusb-*.pkg.tar.zst
+          pacman -U --noconfirm /home/builder/pkg/porthouse-*.pkg.tar.zst
           ./scripts/ci/package-verify.sh
 
   flatpak:
@@ -184,16 +184,16 @@ jobs:
       - uses: actions/checkout@v4
       - uses: flathub-infra/flatpak-github-actions/flatpak-builder@933e9e8ca36e85046ebca8e211f0785c6becac40
         with:
-          bundle: netusb.flatpak
-          manifest-path: packaging/flatpak/io.github.rispng.netusb.yml
+          bundle: porthouse.flatpak
+          manifest-path: packaging/flatpak/io.github.rispng.porthouse.yml
           cache-key: flatpak-builder-${{ github.sha }}
       - name: run it from the bundle
         run: |
-          flatpak install --user --noninteractive --bundle netusb.flatpak
-          mkdir -p /tmp/netusb-shot
-          flatpak run --filesystem=/tmp/netusb-shot --env=QT_QPA_PLATFORM=offscreen io.github.rispng.netusb --screenshot /tmp/netusb-shot/use.png
-          test -s /tmp/netusb-shot/use.png
+          flatpak install --user --noninteractive --bundle porthouse.flatpak
+          mkdir -p /tmp/porthouse-shot
+          flatpak run --filesystem=/tmp/porthouse-shot --env=QT_QPA_PLATFORM=offscreen io.github.rispng.porthouse --screenshot /tmp/porthouse-shot/use.png
+          test -s /tmp/porthouse-shot/use.png
       - uses: actions/upload-artifact@v4
         with:
           name: package-flatpak
-          path: netusb.flatpak
+          path: porthouse.flatpak

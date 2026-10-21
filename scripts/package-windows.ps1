@@ -13,12 +13,12 @@ $stage = "$PWD\dist\stage"
 Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path "$stage\gui" | Out-Null
 
-foreach ($f in 'netusb-server.exe', 'netusb-clientd.exe', 'netusb-client.exe') { Copy-Item (Join-Path $Bin $f) $stage }
-Copy-Item 'LICENSE-MIT', 'LICENSE-APACHE', 'gui\icons\netusb.ico' $stage
+foreach ($f in 'porthouse-server.exe', 'porthouse-clientd.exe', 'porthouse-client.exe') { Copy-Item (Join-Path $Bin $f) $stage }
+Copy-Item 'LICENSE-MIT', 'LICENSE-APACHE', 'gui\icons\porthouse.ico' $stage
 
 # The program with the Qt files it needs. Only the Basic style is used, so only that is shipped.
-Copy-Item (Join-Path $GuiBuild 'netusb.exe') "$stage\gui"
-& windeployqt.exe --release --no-translations --no-system-d3d-compiler --no-opengl-sw --qmldir gui\qml "$stage\gui\netusb.exe"
+Copy-Item (Join-Path $GuiBuild 'porthouse.exe') "$stage\gui"
+& windeployqt.exe --release --no-translations --no-system-d3d-compiler --no-opengl-sw --qmldir gui\qml "$stage\gui\porthouse.exe"
 if ($LASTEXITCODE -ne 0) { throw 'windeployqt failed' }
 $runtime = Join-Path $env:VCToolsRedistDir 'x64\Microsoft.VC143.CRT'
 if (-not (Test-Path $runtime)) { throw "the Visual C++ runtime was not found at $runtime" }
@@ -32,6 +32,6 @@ if ((Get-FileHash $usbip -Algorithm SHA256).Hash.ToLower() -ne $sha) { throw 'us
 
 $iscc = (Get-Command ISCC.exe -ErrorAction SilentlyContinue).Source
 if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
-& $iscc "/DVersion=$version" "/DStage=$stage" packaging\windows\netusb.iss
+& $iscc "/DVersion=$version" "/DStage=$stage" packaging\windows\porthouse.iss
 if ($LASTEXITCODE -ne 0) { throw 'Inno Setup failed' }
 Get-ChildItem dist\*-setup.exe | Format-Table Name, Length -AutoSize | Out-String | Write-Host

@@ -51,8 +51,8 @@ ScrollView {
             Layout.leftMargin: 20
             Layout.rightMargin: 20
             visible: !serverLink.connected
-            title: qsTr("The netusb server service is not running")
-            text: qsTr("It is what shares this computer’s devices. Start it, then this page fills in on its own. On Linux: sudo systemctl start netusb-server. On Windows: start the “netusb server” service.")
+            title: qsTr("The Porthouse server service is not running")
+            text: qsTr("It is what shares this computer’s devices. Start it, then this page fills in on its own. On Linux: sudo systemctl start porthouse-server. On Windows: start the “porthouse server” service.")
         }
 
         Card {

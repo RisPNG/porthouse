@@ -33,17 +33,17 @@ ControlLink::~ControlLink() {
 
 QStringList ControlLink::socketCandidates(const QString &service) {
 #ifdef Q_OS_WIN
-    return {QStringLiteral("netusb-") + service};
+    return {QStringLiteral("porthouse-") + service};
 #else
     const QString file = service + QStringLiteral(".sock");
-    const QByteArray override = qgetenv("NETUSB_IPC_DIR");
+    const QByteArray override = qgetenv("PORTHOUSE_IPC_DIR");
     if (!override.isEmpty()) {
         return {QDir(QString::fromLocal8Bit(override)).filePath(file)};
     }
-    QStringList list{QStringLiteral("/run/netusb/") + file};
+    QStringList list{QStringLiteral("/run/porthouse/") + file};
     const QByteArray runtime = qgetenv("XDG_RUNTIME_DIR");
     if (!runtime.isEmpty()) {
-        list << QDir(QString::fromLocal8Bit(runtime)).filePath(QStringLiteral("netusb/") + file);
+        list << QDir(QString::fromLocal8Bit(runtime)).filePath(QStringLiteral("porthouse/") + file);
     }
     return list;
 #endif
@@ -75,7 +75,7 @@ void ControlLink::refresh() {
 
 void ControlLink::call(const QString &method, const QVariantMap &params, const QString &tag) {
     if (m_socket.state() != QLocalSocket::ConnectedState) {
-        emit replied(tag, false, tr("The netusb %1 service is not running.").arg(m_service));
+        emit replied(tag, false, tr("The Porthouse %1 service is not running.").arg(m_service));
         return;
     }
     send(method, params, tag);

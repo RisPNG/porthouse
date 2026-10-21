@@ -12,7 +12,7 @@ set -u
 BUSID=${1:-5-1}
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 . "$ROOT/scripts/lib.sh"
-W=$(mktemp -d /tmp/netusb-claim.XXXXXX)
+W=$(mktemp -d /tmp/porthouse-claim.XXXXXX)
 PORT=7690
 SP=""; HP=""; DP=""
 BUS=${BUSID%%-*}
@@ -49,7 +49,7 @@ def frame(b): return struct.pack('<IB', len(b), 0) + b
 def pstr(s): b = s.encode(); return bytes([len(b)]) + b
 ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT); ctx.minimum_version = ssl.TLSVersion.TLSv1_3
 ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE; ctx.load_cert_chain(pem)
-s = ctx.wrap_socket(socket.create_connection(("127.0.0.1", port)), server_hostname="netusb")
+s = ctx.wrap_socket(socket.create_connection(("127.0.0.1", port)), server_hostname="porthouse")
 s.sendall(frame(bytes([0, 4]) + pstr("holdtest"))); time.sleep(0.3); s.recv(65536)
 s.sendall(frame(bytes([3]) + pstr(busid))); time.sleep(0.8); s.recv(65536)
 time.sleep(hold)
@@ -57,10 +57,10 @@ EOF
 
 mkdir -p "$W/s" "$W/c"
 # NOTE: launch the binaries directly (not through a shell function) so $! is the real PID.
-start_server() { NETUSB_STATE_DIR=$W/s NETUSB_IPC_DIR=$W/s/ipc "$SRV" run --no-mdns --port $PORT >> "$W/server.log" 2>&1 & SP=$!; wait_service "$W/s" server; }
+start_server() { PORTHOUSE_STATE_DIR=$W/s PORTHOUSE_IPC_DIR=$W/s/ipc "$SRV" run --no-mdns --port $PORT >> "$W/server.log" 2>&1 & SP=$!; wait_service "$W/s" server; }
 
 start_server
-NETUSB_STATE_DIR=$W/c NETUSB_IPC_DIR=$W/c/ipc "$CLID" run > "$W/clientd.log" 2>&1 & DP=$!
+PORTHOUSE_STATE_DIR=$W/c PORTHOUSE_IPC_DIR=$W/c/ipc "$CLID" run > "$W/clientd.log" 2>&1 & DP=$!
 wait_service "$W/c" client
 PIN=$(sv "$W/s" pair | pin_from)
 cl "$W/c" pair 127.0.0.1:$PORT --pin "$PIN" > /dev/null || { echo "pairing failed"; exit 1; }

@@ -5,7 +5,7 @@ if [ -d /run/systemd/system ]; then
     systemctl daemon-reload || true
 fi
 if [ "$1" = purge ]; then
-    rm -rf /var/lib/netusb /run/netusb
+    rm -rf /var/lib/porthouse /run/porthouse
 fi
 
 exit 0

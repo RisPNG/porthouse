@@ -1,8 +1,8 @@
 #!/bin/sh
-getent group netusb >/dev/null || groupadd --system netusb
+getent group porthouse >/dev/null || groupadd --system porthouse
 if [ -d /run/systemd/system ]; then
     systemctl daemon-reload || true
-    systemctl enable netusb-server.service netusb-client.service || true
-    systemctl restart netusb-server.service netusb-client.service || true
+    systemctl enable porthouse-server.service porthouse-client.service || true
+    systemctl restart porthouse-server.service porthouse-client.service || true
 fi
 exit 0

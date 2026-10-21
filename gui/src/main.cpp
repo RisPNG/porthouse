@@ -17,7 +17,7 @@
 namespace {
 
 QString instanceName() {
-    return QStringLiteral("netusb-gui-") + QString::fromLocal8Bit(qgetenv("USER").isEmpty() ? qgetenv("USERNAME") : qgetenv("USER"));
+    return QStringLiteral("porthouse-gui-") + QString::fromLocal8Bit(qgetenv("USER").isEmpty() ? qgetenv("USERNAME") : qgetenv("USER"));
 }
 
 void showWindow(QQuickWindow *window) {
@@ -33,9 +33,9 @@ void showWindow(QQuickWindow *window) {
 
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
-    QApplication::setApplicationName(QStringLiteral("netusb"));
-    QApplication::setOrganizationName(QStringLiteral("netusb"));
-    QApplication::setApplicationVersion(QStringLiteral(NETUSB_VERSION));
+    QApplication::setApplicationName(QStringLiteral("porthouse"));
+    QApplication::setOrganizationName(QStringLiteral("porthouse"));
+    QApplication::setApplicationVersion(QStringLiteral(PORTHOUSE_VERSION));
     QApplication::setQuitOnLastWindowClosed(false);
     QQuickStyle::setStyle(QStringLiteral("Basic"));
 
@@ -88,7 +88,7 @@ int main(int argc, char *argv[]) {
     engine.rootContext()->setContextProperty(QStringLiteral("serverLink"), &serverLink);
     engine.rootContext()->setContextProperty(QStringLiteral("trayAvailable"), trayAvailable);
     engine.rootContext()->setContextProperty(QStringLiteral("firstTab"), parser.value(tab));
-    engine.load(QUrl(QStringLiteral("qrc:/Netusb/qml/Main.qml")));
+    engine.load(QUrl(QStringLiteral("qrc:/Porthouse/qml/Main.qml")));
     if (engine.rootObjects().isEmpty()) {
         return 1;
     }

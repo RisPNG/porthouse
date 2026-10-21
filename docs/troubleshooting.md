@@ -2,16 +2,16 @@
 
 ## The program says a service is not running
 
-netusb shows a banner when it cannot reach the server service or the client service. Start the service and the page fills in by itself.
+Porthouse shows a banner when it cannot reach the server service or the client service. Start the service and the page fills in by itself.
 
-- Linux: `sudo systemctl start netusb-server netusb-client`. Check with `systemctl status netusb-server netusb-client`.
-- Windows: open Services and start "netusb server" or "netusb client", or run `Start-Service netusb-server, netusb-client` in an Administrator PowerShell.
+- Linux: `sudo systemctl start porthouse-server porthouse-client`. Check with `systemctl status porthouse-server porthouse-client`.
+- Windows: open Services and start "Porthouse server" or "Porthouse client", or run `Start-Service porthouse-server, porthouse-client` in an Administrator PowerShell.
 
-If the banner stays, your account may not be allowed to use the service. On Linux, add yourself to the `netusb` group with `sudo usermod -aG netusb "$USER"` and sign in again. The command line says so too: "not allowed to use this netusb service".
+If the banner stays, your account may not be allowed to use the service. On Linux, add yourself to the `porthouse` group with `sudo usermod -aG porthouse "$USER"` and sign in again. The command line says so too: "not allowed to use this Porthouse service".
 
 ## The server does not appear in the client
 
-Automatic discovery only works on the same local network. Over a VPN, or across subnets, type the server's address into the box at the bottom of Use devices, or run `netusb-client add ADDRESS`.
+Automatic discovery only works on the same local network. Over a VPN, or across subnets, type the server's address into the box at the bottom of Use devices, or run `porthouse-client add ADDRESS`.
 
 If a server shows "unreachable" after you add it:
 
@@ -20,7 +20,7 @@ If a server shows "unreachable" after you add it:
 
 ## "not a paired server" or "not paired"
 
-The client has no trust relationship with that server, or the server removed it. Pair again. Open a pairing window on the server (Share devices > Allow a new computer to pair, or `netusb-server pair`) and press Pair next to the server, or run `netusb-client pair ADDRESS --pin 1234-5678`.
+The client has no trust relationship with that server, or the server removed it. Pair again. Open a pairing window on the server (Share devices > Allow a new computer to pair, or `porthouse-server pair`) and press Pair next to the server, or run `porthouse-client pair ADDRESS --pin 1234-5678`.
 
 ## Pairing fails
 
@@ -30,15 +30,15 @@ The client has no trust relationship with that server, or the server removed it.
 
 ## "cannot open the device (permission denied)" on Linux
 
-The server could not open the device. The installed service runs as root and can. If you started `netusb-server` yourself as an ordinary user, run it with `sudo` or use the service.
+The server could not open the device. The installed service runs as root and can. If you started `porthouse-server` yourself as an ordinary user, run it with `sudo` or use the service.
 
 ## "every interface you share must use the WinUSB driver" on a Windows server
 
-Windows is using its own driver for that device, which netusb cannot take over. See [using a Windows device from Linux](windows-to-linux.md).
+Windows is using its own driver for that device, which Porthouse cannot take over. See [using a Windows device from Linux](windows-to-linux.md).
 
 ## "could not find the USB/IP importer" on a Windows client
 
-The usbip-win2 driver is not installed, or `usbip.exe` is not where netusb looks. Run the netusb installer again with "Use devices from other computers" selected, or install the driver from <https://github.com/vadimgrn/usbip-win2/releases>. netusb looks in `%ProgramFiles%\USBip`, on `PATH`, and at the path in the `NETUSB_USBIP_EXE` environment variable of the service.
+The usbip-win2 driver is not installed, or `usbip.exe` is not where Porthouse looks. Run the Porthouse installer again with "Use devices from other computers" selected, or install the driver from <https://github.com/vadimgrn/usbip-win2/releases>. Porthouse looks in `%ProgramFiles%\USBip`, on `PATH`, and at the path in the `PORTHOUSE_USBIP_EXE` environment variable of the service.
 
 ## "vhci_hcd is not loaded" on a Linux client
 
@@ -48,17 +48,17 @@ Load the kernel module with `sudo modprobe vhci-hcd`. If it does not exist, inst
 
 - Press Release in the client's program.
 - Unplug and replug the device. It comes back as a fresh device on the computer that owns it.
-- Stop the server service: `sudo systemctl stop netusb-server` on Linux, or stop "netusb server" in Services on Windows. It hands every device back as it stops.
+- Stop the server service: `sudo systemctl stop porthouse-server` on Linux, or stop "Porthouse server" in Services on Windows. It hands every device back as it stops.
 - If the client computer vanished through sleep, a crash, or network loss, the server notices in about 25 seconds.
 
 ## The notification-area icon is missing
 
-netusb needs a notification area. KDE, Xfce, Cinnamon, MATE, and Windows have one. GNOME needs the AppIndicator extension. Without an icon the window still works, and closing it quits the program.
+Porthouse needs a notification area. KDE, Xfce, Cinnamon, MATE, and Windows have one. GNOME needs the AppIndicator extension. Without an icon the window still works, and closing it quits the program.
 
 ## Getting logs
 
-- Linux: `journalctl -u netusb-server` and `journalctl -u netusb-client`.
-- Windows: the services write to `%ProgramData%\netusb\server.log` and `client.log`. To watch a service live, stop it and run `netusb-server.exe run` or `netusb-clientd.exe run` in an Administrator PowerShell.
-- For a detailed trace of every USB request, start the server with the environment variable `NETUSB_TRACE=1`. It is very verbose and shows device traffic, so share it with care.
+- Linux: `journalctl -u porthouse-server` and `journalctl -u porthouse-client`.
+- Windows: the services write to `%ProgramData%\porthouse\server.log` and `client.log`. To watch a service live, stop it and run `porthouse-server.exe run` or `porthouse-clientd.exe run` in an Administrator PowerShell.
+- For a detailed trace of every USB request, start the server with the environment variable `PORTHOUSE_TRACE=1`. It is very verbose and shows device traffic, so share it with care.
 
-Still stuck? Open an issue and include the versions (`netusb-server --version`), both operating systems, the exact error text, and the log lines around it. Do not post PINs or the contents of the state directory.
+Still stuck? Open an issue and include the versions (`porthouse-server --version`), both operating systems, the exact error text, and the log lines around it. Do not post PINs or the contents of the state directory.

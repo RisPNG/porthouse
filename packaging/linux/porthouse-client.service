@@ -1,20 +1,20 @@
 [Unit]
-Description=netusb client, plugs in USB devices that other computers share
-Documentation=https://github.com/RisPNG/netusb
+Description=Porthouse client, plugs in USB devices that other computers share
+Documentation=https://github.com/RisPNG/porthouse
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
 ExecStartPre=-/sbin/modprobe vhci-hcd
-ExecStart=/usr/bin/netusb-clientd run
+ExecStart=/usr/bin/porthouse-clientd run
 KillSignal=SIGTERM
 TimeoutStopSec=10
 Restart=on-failure
 RestartSec=2
-StateDirectory=netusb
+StateDirectory=porthouse
 StateDirectoryMode=0700
-RuntimeDirectory=netusb
+RuntimeDirectory=porthouse
 RuntimeDirectoryPreserve=yes
 
 NoNewPrivileges=yes

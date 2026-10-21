@@ -1,0 +1,8 @@
+post_install() {
+  echo 'Start the services with: systemctl enable --now porthouse-server porthouse-client'
+  echo 'Add yourself to the porthouse group to use the program without root: usermod -aG porthouse "$USER"'
+}
+
+post_upgrade() {
+  systemctl try-restart porthouse-server.service porthouse-client.service || true
+}

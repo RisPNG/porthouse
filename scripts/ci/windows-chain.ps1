@@ -3,7 +3,7 @@
 #
 #   server A (virtual loopback device) --TLS--> client --usbip-win2 driver--> Windows enumerates a
 #   USB device 1209:0002 and, thanks to its Microsoft OS descriptors, binds WinUSB to it
-#   server B (netusb-server.exe, native engine) shares that WinUSB device
+#   server B (porthouse-server.exe, native engine) shares that WinUSB device
 #   fake driver --TLS--> server B: control, bulk echo, cancel, ordering
 param([string]$Bin = "$PWD\target\release")
 $ErrorActionPreference = 'Stop'
@@ -15,9 +15,9 @@ Write-Host '== install usbip-win2 (pinned by checksum)'
 Install-UsbipWin2 $work
 
 Write-Host '== server A shares the virtual loopback device; client 1 plugs it into Windows'
-$env:NETUSB_TRACE = '1'
+$env:PORTHOUSE_TRACE = '1'
 $sa = Start-Nu $srv @('run', '--no-mdns', '--port', 7600, '--test-device', 'loopback') "$work\a" 'server'
-Remove-Item Env:\NETUSB_TRACE
+Remove-Item Env:\PORTHOUSE_TRACE
 $c1d = Start-Nu $clid @('run') "$work\c1" 'clientd'
 Check 'server A answers' (Wait-ServerReady "$work\a")
 Check 'client service 1 answers' (Wait-ClientReady "$work\c1")
@@ -49,9 +49,9 @@ if ($found) {
 }
 
 Write-Host '== server B (native Windows engine) shares that WinUSB device'
-$env:NETUSB_TRACE = '1'   # log every URB the Windows engine handles
+$env:PORTHOUSE_TRACE = '1'   # log every URB the Windows engine handles
 $sb = Start-Nu $srv @('run', '--no-mdns', '--port', 7601) "$work\b" 'server'
-Remove-Item Env:\NETUSB_TRACE
+Remove-Item Env:\PORTHOUSE_TRACE
 Check 'server B answers' (Wait-ServerReady "$work\b")
 Check 'server B is listening' (Wait-For 20 { Get-NetTCPConnection -LocalPort 7601 -State Listen -ErrorAction SilentlyContinue })
 $pin = Get-Pin "$work\b"
@@ -72,7 +72,7 @@ $list = & $cli list 2>&1 | Out-String
 Write-Host $list
 $busid = [regex]::Match($list, '(\S+)\s+1209:0002').Groups[1].Value
 Check 'server B lists the WinUSB device' ($busid -ne '') $list
-Check 'the server reports it with its real name' ($list -match 'netusb loopback device')
+Check 'the server reports it with its real name' ($list -match 'porthouse loopback device')
 $c2Out = & $cli use 127.0.0.1:7601 $busid --seconds 150 2>&1 | Out-String
 Set-Content "$work\c2.out" $c2Out
 Check 'the exercise finished' (Wait-For 60 { Test-Path "$work\out\done" })

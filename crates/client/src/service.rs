@@ -4,9 +4,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::Result;
-use netusb_common::paths;
-use netusb_ipc::{params, Request, Service};
-use netusb_proto::{ClientMsg, DeviceInfo, ServerMsg, MDNS_SERVICE};
+use porthouse_common::paths;
+use porthouse_ipc::{params, Request, Service};
+use porthouse_proto::{ClientMsg, DeviceInfo, ServerMsg, MDNS_SERVICE};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tokio::sync::oneshot;
@@ -76,7 +76,7 @@ impl Shared {
     fn save_manual(&self) {
         let list: Vec<String> = self.manual.lock().unwrap().iter().cloned().collect();
         if let Ok(dir) = paths::state_dir() {
-            let _ = netusb_common::identity::write_private(&dir.join(SERVERS_FILE), list.join("\n").as_bytes());
+            let _ = porthouse_common::identity::write_private(&dir.join(SERVERS_FILE), list.join("\n").as_bytes());
         }
     }
 }
@@ -380,7 +380,7 @@ pub async fn run(ctx: Ctx, importer: Option<std::path::PathBuf>, shutdown: impl 
     tokio::spawn(refresh_loop(app.clone()));
 
     let handler_app = app.clone();
-    let api = netusb_ipc::serve(Service::Client, move |req| handle(handler_app.clone(), req));
+    let api = porthouse_ipc::serve(Service::Client, move |req| handle(handler_app.clone(), req));
     tokio::select! {
         r = api => r?,
         _ = shutdown => {}

@@ -4,9 +4,9 @@
 # named after it, so several can run side by side without touching the installed ones.
 
 $script:fails = 0
-$srv = Join-Path $Bin 'netusb-server.exe'
-$cli = Join-Path $Bin 'netusb-client.exe'
-$clid = Join-Path $Bin 'netusb-clientd.exe'
+$srv = Join-Path $Bin 'porthouse-server.exe'
+$cli = Join-Path $Bin 'porthouse-client.exe'
+$clid = Join-Path $Bin 'porthouse-clientd.exe'
 
 function Check($name, $ok, $detail = '') {
     if ($ok) { Write-Host "  PASS  $name" } else { Write-Host "  FAIL  $name $detail"; $script:fails++ }
@@ -17,11 +17,11 @@ function Wait-For($seconds, [scriptblock]$cond) {
     return $false
 }
 
-# Point the following netusb commands at the instance whose files are in $dir.
+# Point the following porthouse commands at the instance whose files are in $dir.
 function Use-Instance($dir) {
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
-    $env:NETUSB_STATE_DIR = $dir
-    $env:NETUSB_IPC_DIR = $dir
+    $env:PORTHOUSE_STATE_DIR = $dir
+    $env:PORTHOUSE_IPC_DIR = $dir
 }
 
 function Start-Nu($exe, $arguments, $dir, $logName) {

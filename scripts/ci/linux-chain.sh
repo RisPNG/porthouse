@@ -10,7 +10,7 @@
 set -u
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 . "$ROOT/scripts/lib.sh"
-W=$(mktemp -d /tmp/netusb-linux-chain.XXXXXX)
+W=$(mktemp -d /tmp/porthouse-linux-chain.XXXXXX)
 PASS=0; FAIL=0; PIDS=()
 ok()  { echo "  PASS  $1"; PASS=$((PASS+1)); }
 bad() { echo "  FAIL  $1"; FAIL=$((FAIL+1)); }
@@ -27,8 +27,8 @@ modprobe vhci-hcd 2>&1 || true
 mkdir -p "$W"/{a,b,c1,c2,out}
 
 echo "== server A shares the virtual loopback device; client 1 plugs it into this kernel"
-NETUSB_STATE_DIR=$W/a NETUSB_IPC_DIR=$W/a/ipc "$SRV" run --no-mdns --port 7600 --test-device loopback > "$W/a.log" 2>&1 & PIDS+=($!)
-NETUSB_STATE_DIR=$W/c1 NETUSB_IPC_DIR=$W/c1/ipc "$CLID" run > "$W/c1d.log" 2>&1 & PIDS+=($!)
+PORTHOUSE_STATE_DIR=$W/a PORTHOUSE_IPC_DIR=$W/a/ipc "$SRV" run --no-mdns --port 7600 --test-device loopback > "$W/a.log" 2>&1 & PIDS+=($!)
+PORTHOUSE_STATE_DIR=$W/c1 PORTHOUSE_IPC_DIR=$W/c1/ipc "$CLID" run > "$W/c1d.log" 2>&1 & PIDS+=($!)
 wait_service "$W/a" server && wait_service "$W/c1" client || exit 1
 PIN=$(sv "$W/a" pair | pin_from)
 cl "$W/c1" pair 127.0.0.1:7600 --pin "$PIN" > /dev/null && ok "client 1 paired with A" || bad "pairing with A"
@@ -38,8 +38,8 @@ lsusb 2>/dev/null | grep -i 1209:0002 && ok "the kernel enumerated the virtual d
 sleep 1
 
 echo "== server B (real engine) shares that kernel device"
-NETUSB_STATE_DIR=$W/b NETUSB_IPC_DIR=$W/b/ipc "$SRV" run --no-mdns --port 7601 > "$W/b.log" 2>&1 & PIDS+=($!)
-FAKE_OUT=$W/out NETUSB_STATE_DIR=$W/c2 NETUSB_IPC_DIR=$W/c2/ipc "$CLID" run --importer "$ROOT/scripts/ci/fake-usbip.py" > "$W/c2d.log" 2>&1 & PIDS+=($!)
+PORTHOUSE_STATE_DIR=$W/b PORTHOUSE_IPC_DIR=$W/b/ipc "$SRV" run --no-mdns --port 7601 > "$W/b.log" 2>&1 & PIDS+=($!)
+FAKE_OUT=$W/out PORTHOUSE_STATE_DIR=$W/c2 PORTHOUSE_IPC_DIR=$W/c2/ipc "$CLID" run --importer "$ROOT/scripts/ci/fake-usbip.py" > "$W/c2d.log" 2>&1 & PIDS+=($!)
 wait_service "$W/b" server && wait_service "$W/c2" client || exit 1
 PIN=$(sv "$W/b" pair | pin_from)
 cl "$W/c2" pair 127.0.0.1:7601 --pin "$PIN" > /dev/null && ok "client 2 paired with B" || bad "pairing with B"

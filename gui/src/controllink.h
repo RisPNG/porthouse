@@ -6,7 +6,7 @@
 #include <QTimer>
 #include <QVariantMap>
 
-// One connection to a netusb service (client or server) over its local control channel.
+// One connection to a porthouse service (client or server) over its local control channel.
 // Requests and replies are one JSON object per line; the state of the service is polled.
 class ControlLink : public QObject {
     Q_OBJECT

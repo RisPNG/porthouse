@@ -99,8 +99,8 @@ ScrollView {
             Layout.leftMargin: 20
             Layout.rightMargin: 20
             visible: !clientLink.connected
-            title: qsTr("The netusb client service is not running")
-            text: qsTr("It lets this program attach devices. Start it, then this page fills in on its own. On Linux: sudo systemctl start netusb-client. On Windows: start the “netusb client” service.")
+            title: qsTr("The Porthouse client service is not running")
+            text: qsTr("It lets this program attach devices. Start it, then this page fills in on its own. On Linux: sudo systemctl start porthouse-client. On Windows: start the “porthouse client” service.")
         }
 
         Text {

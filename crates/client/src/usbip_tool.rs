@@ -4,7 +4,7 @@ use std::process::Stdio;
 use std::time::Duration;
 
 use anyhow::{bail, Context, Result};
-use netusb_proto::AttachInfo;
+use porthouse_proto::AttachInfo;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
@@ -122,12 +122,12 @@ async fn accept_import_with(listener: &TcpListener, token: &str, info: &AttachIn
 }
 
 pub fn find_tool() -> Result<PathBuf> {
-    if let Some(p) = std::env::var_os("NETUSB_USBIP_EXE") {
+    if let Some(p) = std::env::var_os("PORTHOUSE_USBIP_EXE") {
         let p = PathBuf::from(p);
         return if p.is_file() {
             Ok(p)
         } else {
-            bail!("NETUSB_USBIP_EXE points at {}, which is not a file", p.display())
+            bail!("PORTHOUSE_USBIP_EXE points at {}, which is not a file", p.display())
         };
     }
     #[cfg(windows)]
@@ -150,7 +150,7 @@ pub fn find_tool() -> Result<PathBuf> {
     }
     bail!(
         "could not find the USB/IP importer ({name}). Install usbip-win2 from https://github.com/vadimgrn/usbip-win2/releases, \
-         or set NETUSB_USBIP_EXE to its full path"
+         or set PORTHOUSE_USBIP_EXE to its full path"
     )
 }
 
@@ -168,7 +168,7 @@ fn command(exe: &Path) -> tokio::process::Command {
 fn random_token() -> Result<String> {
     let mut b = [0u8; 8];
     getrandom::fill(&mut b).map_err(|e| anyhow::anyhow!("random source failed: {e}"))?;
-    Ok(format!("nu{}", netusb_common::identity::hex(&b)))
+    Ok(format!("nu{}", porthouse_common::identity::hex(&b)))
 }
 
 pub async fn attach(exe: &Path, info: &AttachInfo) -> Result<(TcpStream, u32)> {
@@ -191,7 +191,7 @@ pub async fn attach(exe: &Path, info: &AttachInfo) -> Result<(TcpStream, u32)> {
         .spawn()
         .with_context(|| format!("starting {}", exe.display()))?;
 
-    let path = format!("netusb/{}", info.busid);
+    let path = format!("porthouse/{}", info.busid);
     let serve = accept_import(&listener, &token, info, &path);
     let wait = child.wait_with_output();
     tokio::pin!(serve, wait);
@@ -287,12 +287,12 @@ mod tests {
 
     #[test]
     fn reply_matches_the_usbip_wire_layout() {
-        let r = import_reply(&info(), "netusb/5-1", "nuTOKEN");
+        let r = import_reply(&info(), "porthouse/5-1", "nuTOKEN");
         assert_eq!(r.len(), 8 + 312, "op_common + usbip_usb_device");
         assert_eq!(&r[0..2], &[0x01, 0x11], "protocol version 0x0111");
         assert_eq!(&r[2..4], &[0x00, 0x03], "OP_REP_IMPORT");
         assert_eq!(&r[4..8], &[0, 0, 0, 0], "status OK");
-        assert_eq!(&r[8..18], b"netusb/5-1");
+        assert_eq!(&r[8..18], b"porthouse/5-1");
         assert_eq!(r[18], 0, "path is NUL padded");
         let busid = 8 + 256;
         assert_eq!(
@@ -428,7 +428,7 @@ mod tests {
         }
 
         fn tmp(tag: &str) -> PathBuf {
-            let d = std::env::temp_dir().join(format!("netusb-tool-{tag}-{}", std::process::id()));
+            let d = std::env::temp_dir().join(format!("porthouse-tool-{tag}-{}", std::process::id()));
             std::fs::create_dir_all(&d).unwrap();
             d
         }
@@ -463,7 +463,7 @@ echo 7
             );
             assert_eq!(
                 reply,
-                import_reply(&info(), "netusb/5-1", &id),
+                import_reply(&info(), "porthouse/5-1", &id),
                 "importer received exactly our device description"
             );
             // The accepted socket is live: the driver side (a background process) still holds it.

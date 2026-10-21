@@ -1,24 +1,24 @@
 [package]
-name = "netusb-client"
+name = "porthouse-client"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [[bin]]
-name = "netusb-client"
+name = "porthouse-client"
 path = "src/main.rs"
 
 [[bin]]
-name = "netusb-clientd"
+name = "porthouse-clientd"
 path = "src/bin/clientd.rs"
 
 [dependencies]
 anyhow = "1.0.104"
 getrandom = "0.4.3"
 mdns-sd = "0.21.6"
-netusb-common = { path = "../common" }
-netusb-ipc = { path = "../ipc" }
-netusb-proto = { path = "../proto" }
+porthouse-common = { path = "../common" }
+porthouse-ipc = { path = "../ipc" }
+porthouse-proto = { path = "../proto" }
 rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"

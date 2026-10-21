@@ -1,15 +1,15 @@
-# Maintainer: netusb <hello@rispeng.com>
-pkgname=netusb
+# Maintainer: Ris Peng <hello@rispeng.com>
+pkgname=porthouse
 pkgver=0.2.0
 pkgrel=1
 pkgdesc='Use USB devices that are plugged into other computers, and share yours'
 arch=('x86_64')
-url='https://github.com/RisPNG/netusb'
+url='https://github.com/RisPNG/porthouse'
 license=('MIT OR Apache-2.0')
 depends=('qt6-base' 'qt6-declarative' 'kmod' 'systemd')
 makedepends=('cargo' 'cmake' 'ninja')
 options=('!lto')
-install=netusb.install
+install=porthouse.install
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
 sha256sums=('SKIP')
 
@@ -21,11 +21,11 @@ prepare() {
 build() {
   cd "$pkgname-$pkgver"
   export CARGO_TARGET_DIR=target
-  cargo build --release --frozen -p netusb-server -p netusb-client
+  cargo build --release --frozen -p porthouse-server -p porthouse-client
   cmake -S . -B build -G Ninja \
     -DCMAKE_BUILD_TYPE=None \
     -DCMAKE_INSTALL_PREFIX=/usr \
-    -DNETUSB_RUST_BIN_DIR="$PWD/target/release"
+    -DPORTHOUSE_RUST_BIN_DIR="$PWD/target/release"
   cmake --build build
 }
 

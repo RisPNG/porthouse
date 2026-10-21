@@ -13,7 +13,7 @@ The mouse moves, it is not copied. While Windows is using it, the Linux computer
 
 ## 1. On the Linux computer, the one with the mouse
 
-Install the package, for example `sudo apt install ./netusb-ubuntu-24.04-*.deb` or `sudo dnf install ./netusb-fedora-43-*.rpm`. The services start by themselves and netusb appears in the application menu.
+Install the package, for example `sudo apt install ./porthouse-ubuntu-24.04-*.deb` or `sudo dnf install ./porthouse-fedora-43-*.rpm`. The services start by themselves and Porthouse appears in the application menu.
 
 The server listens on TCP port 7600. If you run a firewall, allow that port only from the Windows PC or from your trusted network, for example:
 
@@ -21,12 +21,12 @@ The server listens on TCP port 7600. If you run a firewall, allow that port only
 sudo ufw allow from 192.168.1.0/24 to any port 7600
 ```
 
-Open netusb, go to Share devices, and press Allow a new computer to pair. A PIN appears. It is good for 10 minutes and works once. Leave the window open.
+Open Porthouse, go to Share devices, and press Allow a new computer to pair. A PIN appears. It is good for 10 minutes and works once. Leave the window open.
 
 ## 2. On the Windows PC, the one that will use the mouse
 
 1. Run the installer from the Releases page. Keep "Use devices from other computers" selected. It installs the usbip-win2 driver, which adds a virtual USB controller, and starts the client service. Windows SmartScreen may ask for confirmation because the installer is not code signed yet.
-2. Open netusb from the Start Menu.
+2. Open Porthouse from the Start Menu.
 3. On Use devices, type the Linux computer's address (for example `192.168.1.20`) into the box at the bottom and press Add. Computers on the same local network may appear by themselves, but over a VPN you add them by address.
 4. Press Pair next to the server, type the PIN from step 1, and press Pair. The server now shows "paired" and lists its USB devices.
 
@@ -40,9 +40,9 @@ For a moment the Linux pointer freezes. Then the mouse controls the Windows PC. 
 
 Any of these returns the mouse to Linux:
 
-- Press Release next to it in netusb on Windows. This is the clean way.
+- Press Release next to it in Porthouse on Windows. This is the clean way.
 - Unplug and replug the mouse. It comes back as a fresh device that Linux picks up normally.
-- From a Linux terminal, run `sudo systemctl stop netusb-server`. The server hands every device back as it stops.
+- From a Linux terminal, run `sudo systemctl stop porthouse-server`. The server hands every device back as it stops.
 - If the Windows PC goes to sleep, crashes, or loses the network, the server notices within about 25 seconds and gives the mouse back by itself.
 
 ## Good to know
@@ -50,6 +50,6 @@ Any of these returns the mouse to Linux:
 - Pointer speed, acceleration, and button mapping now come from the Windows settings and any vendor software installed there, because Windows sees the mouse as if it were plugged in.
 - Keyboards work the same way. A keyboard that you are typing on disappears from Linux while Windows uses it, so have another one, or release it with the mouse first.
 - Only one computer can use a device at a time. To share a different device, repeat step 3 for it.
-- To stop sharing for good, remove the package on Linux (`sudo apt remove netusb` or `sudo dnf remove netusb`) and uninstall netusb from Windows Settings.
+- To stop sharing for good, remove the package on Linux (`sudo apt remove porthouse` or `sudo dnf remove porthouse`) and uninstall Porthouse from Windows Settings.
 
 If something does not work, see [troubleshooting](troubleshooting.md).

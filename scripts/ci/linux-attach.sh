@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Real attach on Linux with real vhci_hcd: attaches netusb's virtual mouse, then proves that the
+# Real attach on Linux with real vhci_hcd: attaches porthouse's virtual mouse, then proves that the
 # kernel created a working input device and that movement reports arrive through the whole chain.
 # Needs root and the vhci-hcd kernel module. Run from the repository root after `cargo build`.
 set -u
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 . "$ROOT/scripts/lib.sh"
-W=$(mktemp -d /tmp/netusb-linux-attach.XXXXXX)
+W=$(mktemp -d /tmp/porthouse-linux-attach.XXXXXX)
 PORT=7600
 PASS=0; FAIL=0; SP=""; CP=""
 ok()  { echo "  PASS  $1"; PASS=$((PASS+1)); }
@@ -32,8 +32,8 @@ modprobe hid-generic 2>/dev/null || true
 
 echo "== server, pairing"
 mkdir -p "$W/s" "$W/c"
-NETUSB_STATE_DIR=$W/s NETUSB_IPC_DIR=$W/s/ipc "$SRV" run --no-mdns --port $PORT --test-device mouse > "$W/server.log" 2>&1 & SP=$!
-NETUSB_STATE_DIR=$W/c NETUSB_IPC_DIR=$W/c/ipc "$CLID" run > "$W/clientd.log" 2>&1 & CP=$!
+PORTHOUSE_STATE_DIR=$W/s PORTHOUSE_IPC_DIR=$W/s/ipc "$SRV" run --no-mdns --port $PORT --test-device mouse > "$W/server.log" 2>&1 & SP=$!
+PORTHOUSE_STATE_DIR=$W/c PORTHOUSE_IPC_DIR=$W/c/ipc "$CLID" run > "$W/clientd.log" 2>&1 & CP=$!
 wait_service "$W/s" server && wait_service "$W/c" client || exit 1
 PIN=$(sv "$W/s" pair | pin_from)
 cl "$W/c" pair 127.0.0.1:$PORT --pin "$PIN" > /dev/null && ok "paired" || bad "pairing"
@@ -45,7 +45,7 @@ cl "$W/c" use 127.0.0.1:$PORT 99-1 --seconds 120 > "$W/use.out" 2> "$W/use.err"
 for _ in $(seq 1 30); do grep -q attached "$W/use.out" && break; sleep 1; done
 grep -q attached "$W/use.out" && ok "client reports the device attached" || bad "client never attached"
 # Enumeration and driver binding take a moment; wait for the input device instead of guessing.
-[ "$HAVE_HID" = 1 ] && for _ in $(seq 1 40); do grep -q "netusb virtual mouse" /proc/bus/input/devices && break; sleep 0.5; done
+[ "$HAVE_HID" = 1 ] && for _ in $(seq 1 40); do grep -q "porthouse virtual mouse" /proc/bus/input/devices && break; sleep 0.5; done
 
 echo "== diagnostics"
 echo "--- lsusb -t"; lsusb -t 2>&1 | head -20
@@ -59,8 +59,8 @@ echo "--- dmesg (usb/hid/vhci)"; dmesg 2>/dev/null | grep -i -E 'vhci|usb 1-|hid
 sleep 2
 
 echo "== what the kernel made of it"
-grep -B2 -A8 "netusb virtual mouse" /proc/bus/input/devices || true
-EV=$(awk '/netusb virtual mouse/{f=1} f&&/Handlers=/{print; exit}' /proc/bus/input/devices | grep -o 'event[0-9]*' | head -1)
+grep -B2 -A8 "porthouse virtual mouse" /proc/bus/input/devices || true
+EV=$(awk '/porthouse virtual mouse/{f=1} f&&/Handlers=/{print; exit}' /proc/bus/input/devices | grep -o 'event[0-9]*' | head -1)
 if [ "$HAVE_HID" = 1 ]; then
   [ -n "$EV" ] && ok "an input device exists for it ($EV)" || bad "no input device was created"
 else

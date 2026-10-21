@@ -9,7 +9,7 @@ ApplicationWindow {
     height: 700
     minimumWidth: 560
     minimumHeight: 440
-    title: "netusb"
+    title: "Porthouse"
     color: theme.background
 
     onClosing: function (close) {
@@ -45,7 +45,7 @@ ApplicationWindow {
             spacing: 24
 
             Text {
-                text: "netusb"
+                text: "Porthouse"
                 color: theme.text
                 font.pixelSize: 17
                 font.bold: true

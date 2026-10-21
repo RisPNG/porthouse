@@ -1,8 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=netusb
-Comment=Keeps the netusb icon in the notification area
-Exec=netusb --minimized
-Icon=netusb
-Terminal=false
-X-GNOME-Autostart-enabled=true
