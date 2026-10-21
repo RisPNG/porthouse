@@ -30,12 +30,6 @@ use tokio::sync::{mpsc, oneshot, watch};
 
 const CONTROL_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// Set NETUSB_TRACE=1 to log every URB. Off by default: it is noisy and exposes device traffic.
-fn trace_on() -> bool {
-    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var_os("NETUSB_TRACE").is_some())
-}
-
 enum Reply {
     /// `actual` is the transferred length; `data` is the payload, present only for IN transfers.
     Submit { seq: u32, status: i32, actual: u32, data: Vec<u8> },
@@ -485,7 +479,7 @@ where
     let writer_inflight = inflight.clone();
     let writer = tokio::spawn(async move {
         while let Some(r) = out_rx.recv().await {
-            if trace_on() {
+            if crate::trace_on() {
                 match &r {
                     Reply::Submit { seq, status, actual, .. } => eprintln!("-> RET_SUBMIT seq={seq} status={status} actual={actual}"),
                     Reply::Unlink { seq, status, .. } => eprintln!("-> RET_UNLINK seq={seq} status={status}"),
@@ -543,7 +537,7 @@ async fn read_loop<R: AsyncRead + Unpin>(rd: &mut R, session: Arc<Session>, out:
             Err(e) => return Err(e.into()),
         }
         let urb = usbip::parse_header(&hdr)?;
-        if trace_on() {
+        if crate::trace_on() {
             eprintln!("<- {urb:?}");
         }
         match urb {

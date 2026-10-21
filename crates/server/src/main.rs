@@ -39,6 +39,13 @@ impl Drop for Active<'_> {
     }
 }
 
+/// Set NETUSB_TRACE=1 to log every URB (engine and virtual devices). Off by default: it is noisy
+/// and exposes device traffic.
+pub(crate) fn trace_on() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("NETUSB_TRACE").is_some())
+}
+
 struct Server {
     id: String,
     name: String,

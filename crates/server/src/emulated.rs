@@ -300,6 +300,14 @@ where
     let (out_tx, mut out_rx) = mpsc::channel::<Reply>(256);
     let writer = tokio::spawn(async move {
         while let Some(r) = out_rx.recv().await {
+            if crate::trace_on() {
+                match &r {
+                    Reply::Submit { seq, status, actual, .. } => {
+                        eprintln!("[{}] -> RET_SUBMIT seq={seq} status={status} actual={actual}", kind.busid())
+                    }
+                    Reply::Unlink { seq, status } => eprintln!("[{}] -> RET_UNLINK seq={seq} status={status}", kind.busid()),
+                }
+            }
             let frame = match r {
                 Reply::Submit { seq, status, data, actual } => {
                     let mut f = usbip::ret_submit(seq, status, actual, 0).to_vec();
@@ -352,7 +360,11 @@ async fn read_loop<R: AsyncRead + Unpin>(rd: &mut R, out: &mpsc::Sender<Reply>, 
             Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => return Ok(()),
             Err(e) => return Err(e.into()),
         }
-        match usbip::parse_header(&hdr)? {
+        let urb = usbip::parse_header(&hdr)?;
+        if crate::trace_on() {
+            eprintln!("[{}] <- {urb:?}", shared.kind.busid());
+        }
+        match urb {
             Urb::Unlink { basic, unlink_seqnum } => {
                 // Whoever removes the entry first owns the answer: this, or the task that would reply.
                 let handle = shared.pending.lock().unwrap().remove(&unlink_seqnum);
