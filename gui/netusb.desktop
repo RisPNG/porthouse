@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=netusb
+GenericName=USB over the network
+Comment=Use USB devices that are plugged into other computers, and share yours
+Exec=netusb
+Icon=netusb
+Terminal=false
+Categories=Utility;System;
+Keywords=usb;network;share;remote;
+StartupWMClass=netusb
