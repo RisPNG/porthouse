@@ -9,7 +9,6 @@
 - The Flatpak. It could only hold the window, not the services that do the sharing and attaching, so it needed a host package anyway.
 
 ### Added
-- The public key that signs Linux releases, `porthouse-signing.asc`.
 - The licences of the Rust libraries, Qt, and the usbip-win2 driver are installed with every package and with the Windows installer, and listed in `THIRD-PARTY-LICENSES.md`.
 
 ## 0.3.0 (21 October 2026)

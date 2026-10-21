@@ -19,7 +19,7 @@ gpg --fingerprint "Porthouse releases"
 gpg --verify porthouse-fedora-43-0.3.0-x86_64.rpm.asc porthouse-fedora-43-0.3.0-x86_64.rpm
 ```
 
-The fingerprint printed by the second command has to be `684F E28C 3AFC FB7B 6F7E  4832 DF0E D7F4 9D1D 70F6`. If a release has no `.asc` files, it was published before the signing key existed.
+If a release has no `.asc` files, it was published before the signing key existed.
 
 ## The Windows installer
 
