@@ -119,6 +119,36 @@ def exercise(drv):
         st2, back = drv.bulk_in(64)
         record("the endpoint still works after a cancel and loses no data", st == 0 and st2 == 0 and back == b"after the cancel", f"{st}/{st2} {back!r}")
 
+        def attempt(name, fn):
+            try:
+                ok, detail = fn()
+                record(name, ok, detail)
+            except Exception as e:  # noqa: BLE001
+                record(name, False, f"{e!r}")
+                raise
+
+        def full_packet():
+            drv.bulk_out(b"F" * 64)
+            st, back = drv.bulk_in(64)
+            return st == 0 and back == b"F" * 64, f"status={st} got {len(back)} bytes {back[:12]!r}"
+
+        attempt("a full-packet (64 of 64) read completes", full_packet)
+
+        def second_full_packet():
+            drv.bulk_out(b"G" * 64)
+            st, back = drv.bulk_in(64)
+            return st == 0 and back == b"G" * 64, f"status={st} got {len(back)} bytes"
+
+        attempt("a second consecutive full-packet read completes", second_full_packet)
+
+        def two_reads_from_128():
+            drv.bulk_out(b"H" * 128)
+            a = drv.bulk_in(64)
+            b = drv.bulk_in(64)
+            return a[0] == 0 and b[0] == 0 and a[1] + b[1] == b"H" * 128, f"{len(a[1])}+{len(b[1])} bytes"
+
+        attempt("two full-packet reads drain 128 queued bytes", two_reads_from_128)
+
         for i in range(20):
             drv.bulk_out(bytes([i]) * 10)
         want = b"".join(bytes([i]) * 10 for i in range(20))
@@ -134,7 +164,9 @@ def exercise(drv):
 
 
 def hold_and_test(s, devid):
+    s.settimeout(15)  # a reply that never comes must show up as a failure, not a silent hang
     exercise(Driver(s, devid))
+    s.settimeout(None)
     try:
         while s.recv(4096):
             pass

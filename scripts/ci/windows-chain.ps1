@@ -39,7 +39,9 @@ $p = Start-Process -FilePath $inst -ArgumentList '/VERYSILENT', '/NORESTART', '/
 Check 'usbip-win2 installed' ($p.ExitCode -eq 0 -and (Test-Path "$env:ProgramFiles\USBip\usbip.exe")) "exit=$($p.ExitCode)"
 
 Write-Host '== server A shares the virtual loopback device; client 1 plugs it into Windows'
+$env:NETUSB_TRACE = '1'
 $sa = Start-NetusbServer "$work\a" 7600 @('--test-device', 'loopback')
+Remove-Item Env:\NETUSB_TRACE
 Check 'server A is listening' (Wait-For 20 { Get-NetTCPConnection -LocalPort 7600 -State Listen -ErrorAction SilentlyContinue })
 $pin = Get-Pin "$work\a"
 $env:NETUSB_STATE_DIR = "$work\c1"
@@ -94,12 +96,12 @@ $results = Get-Content "$work\out\results.txt" -ErrorAction SilentlyContinue
 $results | ForEach-Object { Write-Host "   $_" }
 $nPass = ($results | Where-Object { $_ -like 'PASS*' }).Count
 $nFail = ($results | Where-Object { $_ -like 'FAIL*' }).Count
-Check 'all 10 engine checks passed' (($nPass -eq 10) -and ($nFail -eq 0)) "($nPass passed, $nFail failed)"
+Check 'all 13 engine checks passed' (($nPass -eq 13) -and ($nFail -eq 0)) "($nPass passed, $nFail failed)"
 Stop-Process -Id $c2.Id -Force -ErrorAction SilentlyContinue   # the exercise is over; do not wait out the timer
 
 Write-Host '--- client 1'; Get-Content "$work\c1.out", "$work\c1.err" -ErrorAction SilentlyContinue | Write-Host
 Write-Host '--- client 2'; Get-Content "$work\c2.out", "$work\c2.err" -ErrorAction SilentlyContinue | Write-Host
-Write-Host '--- server A'; Get-Content "$work\a\server.err" -ErrorAction SilentlyContinue | Write-Host
+Write-Host '--- server A (last 40 lines, with URB trace)'; Get-Content "$work\a\server.err" -Tail 40 -ErrorAction SilentlyContinue | Write-Host
 Write-Host '--- server B (last 60 lines, with URB trace)'; Get-Content "$work\b\server.err" -Tail 60 -ErrorAction SilentlyContinue | Write-Host
 Stop-Process -Id $sa.Id, $sb.Id -Force -ErrorAction SilentlyContinue
 if ($fails -gt 0) { Write-Host "$fails check(s) failed"; exit 1 }

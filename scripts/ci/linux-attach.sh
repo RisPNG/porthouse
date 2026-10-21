@@ -25,7 +25,13 @@ fi
 ok "vhci_hcd is loaded"
 
 # The HID driver is normally autoloaded when the device appears, but not always quickly; load it first.
-modprobe usbhid 2>&1 | head -2; modprobe hid-generic 2>&1 | head -2
+# Some runner kernels ship without USB HID support at all; then only the raw interrupt check below applies.
+HAVE_HID=1
+if ! modprobe usbhid 2>/dev/null && [ ! -d /sys/module/usbhid ]; then
+  HAVE_HID=0
+  echo "NOTE: this kernel ($(uname -r)) has no usbhid module; the HID input checks will be skipped"
+fi
+modprobe hid-generic 2>/dev/null || true
 
 echo "== server, pairing"
 mkdir -p "$W/s" "$W/c"
@@ -40,7 +46,7 @@ NETUSB_STATE_DIR=$W/c "$CLI" use 127.0.0.1:$PORT 99-1 --seconds 40 > "$W/use.out
 for _ in $(seq 1 30); do grep -q attached "$W/use.out" && break; sleep 1; done
 grep -q attached "$W/use.out" && ok "client reports the device attached" || bad "client never attached"
 # Enumeration and driver binding take a moment; wait for the input device instead of guessing.
-for _ in $(seq 1 40); do grep -q "netusb virtual mouse" /proc/bus/input/devices && break; sleep 0.5; done
+[ "$HAVE_HID" = 1 ] && for _ in $(seq 1 40); do grep -q "netusb virtual mouse" /proc/bus/input/devices && break; sleep 0.5; done
 
 echo "== diagnostics"
 echo "--- lsusb -t"; lsusb -t 2>&1 | head -20
@@ -56,7 +62,11 @@ sleep 2
 echo "== what the kernel made of it"
 grep -B2 -A8 "netusb virtual mouse" /proc/bus/input/devices || true
 EV=$(awk '/netusb virtual mouse/{f=1} f&&/Handlers=/{print; exit}' /proc/bus/input/devices | grep -o 'event[0-9]*' | head -1)
-[ -n "$EV" ] && ok "an input device exists for it ($EV)" || bad "no input device was created"
+if [ "$HAVE_HID" = 1 ]; then
+  [ -n "$EV" ] && ok "an input device exists for it ($EV)" || bad "no input device was created"
+else
+  echo "  SKIP  input device check (no usbhid in this kernel)"
+fi
 lsusb 2>/dev/null | grep -i 1209:0001 && ok "device is on the virtual USB bus" || bad "device not visible to lsusb"
 
 echo "== movement reports through the whole chain"
