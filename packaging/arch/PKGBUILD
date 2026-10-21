@@ -8,6 +8,7 @@ url='https://github.com/RisPNG/netusb'
 license=('MIT OR Apache-2.0')
 depends=('qt6-base' 'qt6-declarative' 'kmod' 'systemd')
 makedepends=('cargo' 'cmake' 'ninja')
+options=('!lto')
 install=netusb.install
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
 sha256sums=('SKIP')
