@@ -497,19 +497,25 @@ pub async fn prepare(info: nusb::DeviceInfo, busid: String) -> Result<Prepared> 
     }
 }
 
+/// What to do when an interface cannot be claimed.
+fn claim_hint(windows: bool) -> &'static str {
+    if windows {
+        ". On Windows every interface you share must use the WinUSB driver: bind it with a tool such as Zadig \
+         (this replaces the driver Windows normally uses for that interface, so the device stops working locally while shared)"
+    } else {
+        ""
+    }
+}
+
 type Claimed = (Arc<Session>, mpsc::Sender<Reply>, mpsc::Receiver<Reply>, Inflight);
 
 async fn claim_all(device: &Device, numbers: &[u8]) -> Result<Claimed> {
     let mut interfaces = Vec::new();
     for n in numbers {
-        let iface = device.detach_and_claim_interface(*n).await.map_err(|e| {
-            let hint = if cfg!(windows) {
-                "; composite devices (several interfaces) are not supported on Windows yet"
-            } else {
-                ""
-            };
-            anyhow!("cannot claim interface {n} of the device ({e}){hint}")
-        })?;
+        let iface = device
+            .detach_and_claim_interface(*n)
+            .await
+            .map_err(|e| anyhow!("cannot claim interface {n} of the device ({e}){}", claim_hint(cfg!(windows))))?;
         interfaces.push(iface);
     }
 
@@ -729,5 +735,21 @@ async fn read_loop<R: AsyncRead + Unpin>(rd: &mut R, session: Arc<Session>, out:
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod claim_tests {
+    use super::claim_hint;
+
+    #[test]
+    fn the_windows_hint_names_the_real_cause_and_the_remedy() {
+        let h = claim_hint(true);
+        assert!(h.contains("WinUSB") && h.contains("Zadig"), "{h}");
+        assert!(
+            !h.contains("composite"),
+            "must not blame composite devices for a driver problem: {h}"
+        );
+        assert_eq!(claim_hint(false), "", "other systems add nothing");
     }
 }
