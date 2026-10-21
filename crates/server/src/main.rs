@@ -52,7 +52,7 @@ struct Server {
     authorized: TrustStore,
     pin: PinFile,
     /// Offer the built-in virtual mouse (testing only).
-    test_device: bool,
+    test_devices: Vec<emulated::Kind>,
 }
 
 fn hostname() -> String {
@@ -124,17 +124,17 @@ fn list_devices(srv: &Server) -> Result<Vec<DeviceInfo>> {
             }
         })
         .collect();
-    if srv.test_device {
+    for kind in &srv.test_devices {
         list.push(DeviceInfo {
-            busid: emulated::BUSID.into(),
+            busid: kind.busid().into(),
             vendor_id: emulated::VENDOR_ID,
-            product_id: emulated::PRODUCT_ID,
+            product_id: kind.product_id(),
             class: 0,
             speed: Speed::Full,
             manufacturer: Some("netusb".into()),
-            product: Some("netusb virtual mouse (test device)".into()),
-            serial: Some("0001".into()),
-            in_use_by: in_use.get(emulated::BUSID).cloned(),
+            product: Some(format!("{} (test device)", kind.product_name())),
+            serial: Some(kind.serial().into()),
+            in_use_by: in_use.get(kind.busid()).cloned(),
         });
     }
     Ok(list)
@@ -276,7 +276,8 @@ where
                 }
                 ClientMsg::Ping(n) => send(&mut sock, &ServerMsg::Pong(n)).await?,
                 ClientMsg::Attach { busid } => {
-                    let is_virtual = srv.test_device && busid == emulated::BUSID;
+                    let virtual_kind = emulated::Kind::from_busid(&busid).filter(|k| srv.test_devices.contains(k));
+                    let is_virtual = virtual_kind.is_some();
                     let found = if is_virtual {
                         None
                     } else {
@@ -310,16 +311,18 @@ where
                     };
                     srv.active.fetch_add(1, Ordering::SeqCst);
                     let _active = Active(&srv.active);
-                    let info = match &found {
-                        Some(dev) => attach_info(dev),
-                        None => emulated::attach_info(),
+                    let info = match (&found, virtual_kind) {
+                        (Some(dev), _) => attach_info(dev),
+                        (None, Some(kind)) => kind.attach_info(),
+                        (None, None) => unreachable!("a device was found or a virtual kind matched above"),
                     };
                     send(&mut sock, &ServerMsg::Attached(info)).await?;
                     eprintln!("{client_name:?} attached {busid}");
                     // From here the (encrypted) connection carries raw USB/IP URBs until the client leaves.
-                    let result = match found {
-                        Some(dev) => engine::run(dev, busid.clone(), sock, srv.shutdown.clone()).await,
-                        None => emulated::run(sock, srv.shutdown.clone()).await,
+                    let result = match (found, virtual_kind) {
+                        (Some(dev), _) => engine::run(dev, busid.clone(), sock, srv.shutdown.clone()).await,
+                        (None, Some(kind)) => emulated::run(kind, sock, srv.shutdown.clone()).await,
+                        (None, None) => unreachable!("a device was found or a virtual kind matched above"),
                     };
                     eprintln!("{client_name:?} released {busid}");
                     return result;
@@ -348,8 +351,8 @@ fn advertise(name: &str, id: &str, fp: &str, port: u16) -> Result<mdns_sd::Servi
 
 fn usage() {
     println!(
-        "netusb-server [run] [--port N] [--name NAME] [--no-mdns] [--test-device mouse]   run the server
-                                                           (--test-device adds a virtual mouse that moves the pointer of whoever attaches it)
+        "netusb-server [run] [--port N] [--name NAME] [--no-mdns] [--test-device mouse|loopback]...   run the server
+                                                           (--test-device adds software test devices; the mouse moves the pointer of whoever attaches it)
 netusb-server pair                                         open a 10 minute pairing window and print its PIN
 netusb-server clients                                      list paired clients
 netusb-server revoke FINGERPRINT                           remove a paired client"
@@ -406,17 +409,21 @@ async fn main() -> Result<()> {
     let mut port = DEFAULT_PORT;
     let mut name = hostname();
     let mut mdns = true;
-    let mut test_device = false;
+    let mut test_devices: Vec<emulated::Kind> = Vec::new();
     let mut it = args.into_iter();
     while let Some(a) = it.next() {
         match a.as_str() {
             "--port" => port = it.next().context("--port needs a value")?.parse()?,
             "--name" => name = it.next().context("--name needs a value")?,
             "--no-mdns" => mdns = false,
-            "--test-device" => match it.next().as_deref() {
-                Some("mouse") => test_device = true,
-                other => bail!("--test-device supports only `mouse`, not {other:?}"),
-            },
+            "--test-device" => {
+                let v = it.next().context("--test-device needs `mouse` or `loopback`")?;
+                let kind =
+                    emulated::Kind::parse(&v).with_context(|| format!("--test-device supports `mouse` and `loopback`, not {v:?}"))?;
+                if !test_devices.contains(&kind) {
+                    test_devices.push(kind);
+                }
+            }
             other => bail!("unknown argument {other:?} (see --help)"),
         }
     }
@@ -435,7 +442,7 @@ async fn main() -> Result<()> {
         fingerprint: id.fingerprint.clone(),
         authorized: TrustStore::new(&state, "authorized_clients"),
         pin: PinFile::new(&state),
-        test_device,
+        test_devices,
     });
 
     let listener = TcpListener::bind(("0.0.0.0", port))

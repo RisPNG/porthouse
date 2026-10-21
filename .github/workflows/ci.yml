@@ -98,3 +98,34 @@ jobs:
       - name: install, use, uninstall
         shell: pwsh
         run: ./scripts/ci/windows-installer.ps1
+
+  linux-chain:
+    name: linux engine (virtual device shared by the real usbfs engine)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: toolchain
+        run: rustup show
+      - name: build
+        run: cargo build
+      - name: kernel modules
+        run: |
+          sudo apt-get update -y >/dev/null
+          sudo apt-get install -y usbutils
+          sudo apt-get install -y "linux-modules-extra-$(uname -r)" || echo "no modules-extra package for this kernel"
+          sudo modprobe vhci-hcd || true
+      - name: engine test through a real kernel device
+        run: sudo env "PATH=$PATH" ./scripts/ci/linux-chain.sh
+
+  windows-chain:
+    name: windows engine (virtual WinUSB device shared by the native Windows server)
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: toolchain
+        run: rustup show
+      - name: build release
+        run: cargo build --release
+      - name: engine test through a real WinUSB device
+        shell: pwsh
+        run: ./scripts/ci/windows-chain.ps1
