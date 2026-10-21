@@ -57,10 +57,14 @@ fn op_header(code: u16, status: u32) -> Vec<u8> {
 }
 
 /// A successful `OP_REP_IMPORT`: header plus the device description.
-pub fn import_reply(info: &AttachInfo, path: &str) -> Vec<u8> {
+///
+/// `busid` must be exactly the bus id the importer asked for: importers (the reference Linux tool
+/// and the usbip-win2 driver alike) reject a reply that names a different one as a protocol
+/// violation. The real bus id is only informational and travels in `path`.
+pub fn import_reply(info: &AttachInfo, path: &str, busid: &str) -> Vec<u8> {
     let mut b = op_header(OP_REP_IMPORT, ST_OK);
     put_str(&mut b, path, DEV_PATH_MAX);
-    put_str(&mut b, &info.busid, BUS_ID_SIZE);
+    put_str(&mut b, busid, BUS_ID_SIZE);
     b.extend_from_slice(&info.busnum.to_be_bytes());
     b.extend_from_slice(&info.devnum.to_be_bytes());
     b.extend_from_slice(&info.speed.to_be_bytes());
@@ -126,7 +130,9 @@ async fn accept_import_with(listener: &TcpListener, token: &str, info: &AttachIn
         let _ = s.set_nodelay(true);
         match tokio::time::timeout(per_conn, read_request(&mut s)).await {
             Ok(Ok(Request::Import { busid })) if busid == token => {
-                s.write_all(&import_reply(info, path)).await.context("sending the import reply")?;
+                s.write_all(&import_reply(info, path, token))
+                    .await
+                    .context("sending the import reply")?;
                 return Ok(s);
             }
             Ok(Ok(_)) => {
@@ -311,7 +317,7 @@ mod tests {
 
     #[test]
     fn reply_matches_the_usbip_wire_layout() {
-        let r = import_reply(&info(), "netusb/5-1");
+        let r = import_reply(&info(), "netusb/5-1", "nuTOKEN");
         assert_eq!(r.len(), 8 + 312, "op_common + usbip_usb_device");
         assert_eq!(&r[0..2], &[0x01, 0x11], "protocol version 0x0111");
         assert_eq!(&r[2..4], &[0x00, 0x03], "OP_REP_IMPORT");
@@ -319,7 +325,11 @@ mod tests {
         assert_eq!(&r[8..18], b"netusb/5-1");
         assert_eq!(r[18], 0, "path is NUL padded");
         let busid = 8 + 256;
-        assert_eq!(&r[busid..busid + 3], b"5-1");
+        assert_eq!(
+            &r[busid..busid + 7],
+            b"nuTOKEN",
+            "the reply echoes the bus id the importer asked for, not the real one"
+        );
         let n = busid + 32;
         assert_eq!(&r[n..n + 4], &5u32.to_be_bytes(), "busnum");
         assert_eq!(&r[n + 4..n + 8], &2u32.to_be_bytes(), "devnum");
@@ -463,6 +473,7 @@ port=$2; id=$7
 exec 3<>/dev/tcp/127.0.0.1/$port
 printf '\x01\x11\x80\x03\x00\x00\x00\x00' >&3
 printf '%-32s' "$id" | tr ' ' '\000' >&3
+printf '%s' "$id" > "$(dirname "$0")/id.txt"
 head -c 320 <&3 > "$(dirname "$0")/reply.bin"
 ( sleep 30 <&3 >/dev/null 2>&1 & )
 echo 7
@@ -475,9 +486,14 @@ echo 7
             let (mut local, port) = attach(&exe, &info()).await.unwrap();
             assert_eq!(port, 7, "port parsed from --terse output");
             let reply = std::fs::read(d.join("reply.bin")).unwrap();
+            let id = std::fs::read_to_string(d.join("id.txt")).unwrap();
+            assert!(
+                id.starts_with("nu") && id.len() == 18,
+                "the importer was given a random token as its bus id: {id:?}"
+            );
             assert_eq!(
                 reply,
-                import_reply(&info(), "netusb/5-1"),
+                import_reply(&info(), "netusb/5-1", &id),
                 "importer received exactly our device description"
             );
             // The accepted socket is live: the driver side (a background process) still holds it.

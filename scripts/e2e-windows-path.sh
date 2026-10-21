@@ -130,11 +130,13 @@ import struct, sys
 b = open(sys.argv[1], "rb").read()
 assert len(b) == 320
 busid = b[8 + 256: 8 + 256 + 32].split(b"\0")[0].decode()
+path = b[8: 8 + 256].split(b"\0")[0].decode()
 vid, pid = struct.unpack(">HH", b[8 + 256 + 32 + 12: 8 + 256 + 32 + 16])
 want = sys.argv[2]
 sysvid = int(open(f"/sys/bus/usb/devices/{want}/idVendor").read(), 16)
 syspid = int(open(f"/sys/bus/usb/devices/{want}/idProduct").read(), 16)
-assert busid == want and (vid, pid) == (sysvid, syspid), (busid, vid, pid)
+# The reply must echo the (secret) bus id the importer requested; the real one is only in `path`.
+assert busid.startswith("nu") and path == f"netusb/{want}" and (vid, pid) == (sysvid, syspid), (busid, path, vid, pid)
 EOF
 
 echo "== release =="

@@ -44,7 +44,7 @@ jobs:
         run: |
           uname -r
           sudo apt-get update -y >/dev/null
-          sudo apt-get install -y "linux-modules-extra-$(uname -r)" usbutils || true
+          sudo apt-get install -y "linux-modules-extra-$(uname -r)" usbutils python3-usb || true
           sudo modprobe vhci-hcd || true
           ls /sys/devices/platform | grep -i vhci || echo "no vhci_hcd platform device"
       - name: attach and move the pointer

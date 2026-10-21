@@ -21,7 +21,7 @@ check() { local n=$1 want=$2; shift 2; local got; got=$(code "$@"); [ "$got" = "
 
 mkdir -p "$W/s" "$W/c"
 HOSTILE='<img src=x onerror=alert(1)>'
-NETUSB_STATE_DIR=$W/s "$SRV" run --no-mdns --port $SPORT --name "$HOSTILE" > "$W/server.log" 2>&1 & SPID=$!
+NETUSB_STATE_DIR=$W/s "$SRV" run --no-mdns --port $SPORT --test-device mouse --name "$HOSTILE" > "$W/server.log" 2>&1 & SPID=$!
 sleep 1.5
 NETUSB_STATE_DIR=$W/s "$SRV" pair > "$W/pair.out"
 PIN=$(sed -n 's/.*PIN:  \([0-9-]*\).*/\1/p' "$W/pair.out")
