@@ -1,0 +1,4 @@
+if [ "$1" = 0 ] && [ -d /run/systemd/system ]; then
+    systemctl disable --now netusb-server.service netusb-client.service || true
+fi
+exit 0

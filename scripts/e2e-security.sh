@@ -35,8 +35,9 @@ NETUSB_STATE_DIR=$C1 NETUSB_IPC_DIR=$C1/ipc "$CLID" run > "$W/c1d.log" 2>&1 & D1
 NETUSB_STATE_DIR=$C2 NETUSB_IPC_DIR=$C2/ipc "$CLID" run > "$W/c2d.log" 2>&1 & D2=$!
 wait_service "$S" server && wait_service "$C1" client && wait_service "$C2" client || exit 1
 c1 add 127.0.0.1:$PORT; c2 add 127.0.0.1:$PORT
-echo "== server started; first run opens a pairing window =="
-PIN=$(pin_of); [ -n "$PIN" ] && ok "pairing window opened automatically" || bad "no pairing window"
+echo "== server started; pairing is closed until someone opens it =="
+[ -z "$(pin_of)" ] && ok "no pairing window is open by itself" || bad "a pairing window opened without being asked"
+srv pair > /dev/null; PIN=$(pin_of); [ -n "$PIN" ] && ok "pairing window opened on request" || bad "no pairing window"
 
 echo "== unauthenticated access =="
 expect_ok "an unpaired client sees the server but no devices" "not paired" c1 list

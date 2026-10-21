@@ -1,21 +1,22 @@
 [Unit]
-Description=netusb USB sharing server
+Description=netusb server, shares this computer's USB devices
+Documentation=https://github.com/RisPNG/netusb
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=@PREFIX@/bin/netusb-server run
+ExecStart=/usr/bin/netusb-server run
 # SIGTERM makes the server hand every claimed device back to the host before it exits.
 KillSignal=SIGTERM
 TimeoutStopSec=15
 Restart=on-failure
 RestartSec=2
-# Identity, paired clients and the crash-recovery journal live here (/var/lib/netusb).
 StateDirectory=netusb
 StateDirectoryMode=0700
+RuntimeDirectory=netusb
+RuntimeDirectoryPreserve=yes
 
-# The server needs raw USB access and the network; it needs little else.
 NoNewPrivileges=yes
 ProtectHome=yes
 ProtectControlGroups=yes

@@ -1,0 +1,4 @@
+if [ -d /run/systemd/system ]; then
+    systemctl daemon-reload || true
+fi
+exit 0

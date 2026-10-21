@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
-project(netusb-gui VERSION 0.2.0 LANGUAGES CXX)
+include(${CMAKE_CURRENT_LIST_DIR}/../cmake/version.cmake)
+project(netusb-gui VERSION ${NETUSB_VERSION} LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

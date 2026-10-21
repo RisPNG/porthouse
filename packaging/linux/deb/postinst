@@ -1,0 +1,14 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = configure ]; then
+    getent group netusb >/dev/null || groupadd --system netusb
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload || true
+        systemctl enable netusb-server.service netusb-client.service || true
+        systemctl restart netusb-server.service netusb-client.service || true
+    fi
+    gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor 2>/dev/null || true
+fi
+
+exit 0

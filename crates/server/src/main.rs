@@ -532,9 +532,8 @@ async fn main() -> Result<()> {
         .with_context(|| format!("binding port {port}"))?;
     eprintln!("netusb-server {} listening on :{port} as {:?}", env!("CARGO_PKG_VERSION"), srv.name);
     eprintln!("fingerprint {}", srv.fingerprint);
-    if srv.authorized.entries().is_empty() && srv.pin.active().is_none() {
-        let (pin, _) = srv.pin.open_window()?;
-        eprintln!("no clients are paired yet: pairing is open for 10 minutes, PIN {pin}");
+    if srv.authorized.entries().is_empty() {
+        eprintln!("no clients are paired yet; open a pairing window with `netusb-server pair` or from the netusb program");
     }
 
     let control_srv = srv.clone();
