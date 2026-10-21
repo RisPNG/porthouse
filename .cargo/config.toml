@@ -1,0 +1,4 @@
+# Windows: link the C runtime statically so the programs run on a clean machine with no
+# "Visual C++ Redistributable" installed. This is also what CI tests and ships.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
