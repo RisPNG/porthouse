@@ -68,7 +68,9 @@ if ($found) {
 }
 
 Write-Host '== server B (native Windows engine) shares that WinUSB device'
+$env:NETUSB_TRACE = '1'   # log every URB the Windows engine handles
 $sb = Start-NetusbServer "$work\b" 7601 @()
+Remove-Item Env:\NETUSB_TRACE
 Check 'server B is listening' (Wait-For 20 { Get-NetTCPConnection -LocalPort 7601 -State Listen -ErrorAction SilentlyContinue })
 $pin = Get-Pin "$work\b"
 $env:NETUSB_STATE_DIR = "$work\c2"
@@ -85,7 +87,7 @@ Write-Host "python: $py"
 $cmd = "$work\fake-usbip.cmd"
 Set-Content -Path $cmd -Value "@echo off`r`n`"$py`" `"$PWD\scripts\ci\fake-usbip.py`" %*" -Encoding ascii
 $env:FAKE_OUT = "$work\out"
-$c2 = Start-Process -FilePath $cli -ArgumentList 'use', '127.0.0.1:7601', $busid, '--importer', $cmd, '--seconds', '40' `
+$c2 = Start-Process -FilePath $cli -ArgumentList 'use', '127.0.0.1:7601', $busid, '--importer', $cmd, '--seconds', '150' `
     -RedirectStandardOutput "$work\c2.out" -RedirectStandardError "$work\c2.err" -PassThru -NoNewWindow
 Check 'the exercise finished' (Wait-For 60 { Test-Path "$work\out\done" })
 $results = Get-Content "$work\out\results.txt" -ErrorAction SilentlyContinue
@@ -93,12 +95,12 @@ $results | ForEach-Object { Write-Host "   $_" }
 $nPass = ($results | Where-Object { $_ -like 'PASS*' }).Count
 $nFail = ($results | Where-Object { $_ -like 'FAIL*' }).Count
 Check 'all 10 engine checks passed' (($nPass -eq 10) -and ($nFail -eq 0)) "($nPass passed, $nFail failed)"
-$null = $c2.WaitForExit(60000)
+Stop-Process -Id $c2.Id -Force -ErrorAction SilentlyContinue   # the exercise is over; do not wait out the timer
 
 Write-Host '--- client 1'; Get-Content "$work\c1.out", "$work\c1.err" -ErrorAction SilentlyContinue | Write-Host
 Write-Host '--- client 2'; Get-Content "$work\c2.out", "$work\c2.err" -ErrorAction SilentlyContinue | Write-Host
 Write-Host '--- server A'; Get-Content "$work\a\server.err" -ErrorAction SilentlyContinue | Write-Host
-Write-Host '--- server B'; Get-Content "$work\b\server.err" -ErrorAction SilentlyContinue | Write-Host
+Write-Host '--- server B (last 60 lines, with URB trace)'; Get-Content "$work\b\server.err" -Tail 60 -ErrorAction SilentlyContinue | Write-Host
 Stop-Process -Id $sa.Id, $sb.Id -Force -ErrorAction SilentlyContinue
 if ($fails -gt 0) { Write-Host "$fails check(s) failed"; exit 1 }
 Write-Host 'windows chain: all checks passed'

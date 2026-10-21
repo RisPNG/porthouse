@@ -16,9 +16,12 @@ OUT = os.environ["FAKE_OUT"]
 WINDOWS = os.name == "nt"
 
 
+T0 = time.monotonic()
+
+
 def record(name, ok, detail=""):
     with open(os.path.join(OUT, "results.txt"), "a") as f:
-        f.write(f"{'PASS' if ok else 'FAIL'}  {name} {detail}\n")
+        f.write(f"{'PASS' if ok else 'FAIL'}  [{time.monotonic() - T0:6.2f}s] {name} {detail}\n")
 
 
 def rd(s, n):
@@ -33,7 +36,7 @@ def rd(s, n):
 
 class Driver:
     def __init__(self, s, devid):
-        self.s, self.devid, self.seq, self.dirs = s, devid, 0, {}
+        self.s, self.devid, self.seq, self.dirs, self.answered = s, devid, 0, {}, set()
 
     def submit(self, ep, direction, length, setup=bytes(8), data=b""):
         self.seq += 1
@@ -41,6 +44,9 @@ class Driver:
         h = struct.pack(">IIIII", 1, self.seq, self.devid, direction, ep) + struct.pack(">IIiII", 0, length, 0, 0, 0) + setup
         self.s.sendall(h + data)
         return self.seq
+
+    def pending(self):
+        return [q for q in self.dirs if q not in self.answered]
 
     def unlink(self, target):
         self.seq += 1
@@ -52,6 +58,7 @@ class Driver:
         r = rd(self.s, 48)
         cmd, seq = struct.unpack(">II", r[:8])
         status, actual = struct.unpack(">iI", r[20:28])
+        self.answered.add(seq)
         if cmd == 4:
             return ("unlink", seq, status)
         assert cmd == 3, f"unexpected command {cmd}"
@@ -122,7 +129,7 @@ def exercise(drv):
             got += chunk
         record("20 back-to-back transfers keep their order", got == want, f"got {len(got)} bytes")
     except Exception as e:  # noqa: BLE001 - report any failure as a result, never crash silently
-        record("exercise completed without error", False, repr(e))
+        record("exercise completed without error", False, f"{e!r} after {drv.seq} URBs, {len(drv.pending())} unanswered")
     open(os.path.join(OUT, "done"), "w").write("ok")
 
 
