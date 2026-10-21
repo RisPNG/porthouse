@@ -376,46 +376,102 @@ fn usage() {
                                                            (--test-device adds software test devices; the mouse moves the pointer of whoever attaches it)
 netusb-server pair                                         open a 10 minute pairing window and print its PIN
 netusb-server clients                                      list paired clients
-netusb-server revoke FINGERPRINT                           remove a paired client"
+netusb-server revoke FINGERPRINT                           remove a paired client
+
+pair, clients and revoke talk to the running service."
     );
+}
+
+/// Ask the running service to do something and print its answer.
+async fn control(method: &str, params: serde_json::Value) -> Result<serde_json::Value> {
+    let mut c = netusb_ipc::Client::connect(netusb_ipc::Service::Server).await?;
+    c.call(method, params).await
+}
+
+fn text<'a>(v: &'a serde_json::Value, key: &str) -> &'a str {
+    v[key].as_str().unwrap_or("")
+}
+
+struct Handler {
+    srv: Arc<Server>,
+    port: u16,
+}
+
+async fn handle(h: Arc<Handler>, req: netusb_ipc::Request) -> Result<serde_json::Value, String> {
+    use serde_json::json;
+    let srv = &h.srv;
+    match req.method.as_str() {
+        "status" => {
+            let devices = list_devices(srv).map_err(|e| format!("{e:#}"))?;
+            let clients: Vec<_> = srv
+                .authorized
+                .entries()
+                .into_iter()
+                .map(|(fingerprint, name)| json!({ "fingerprint": fingerprint, "name": name }))
+                .collect();
+            let pairing = srv.pin.window().map(|(pin, expires)| json!({ "pin": pin, "expires": expires }));
+            Ok(json!({
+                "version": env!("CARGO_PKG_VERSION"),
+                "name": srv.name,
+                "id": srv.id,
+                "fingerprint": srv.fingerprint,
+                "port": h.port,
+                "devices": devices,
+                "clients": clients,
+                "pairing": pairing,
+            }))
+        }
+        "open_pairing" => {
+            let (pin, expires) = srv.pin.open_window().map_err(|e| format!("{e:#}"))?;
+            Ok(json!({ "pin": pin, "expires": expires }))
+        }
+        "revoke" => {
+            let fp = req.params["fingerprint"].as_str().ok_or("fingerprint is required")?;
+            // An unambiguous prefix is enough, so nobody has to paste all 64 characters.
+            let matches: Vec<_> = srv.authorized.entries().into_iter().filter(|(f, _)| f.starts_with(fp)).collect();
+            match matches.as_slice() {
+                [(f, n)] => {
+                    srv.authorized.remove(f).map_err(|e| format!("{e:#}"))?;
+                    Ok(json!({ "name": n }))
+                }
+                [] => Err(format!("no paired client matches {fp:?}")),
+                _ => Err(format!("{fp:?} matches several clients; use more characters")),
+            }
+        }
+        other => Err(format!("unknown method {other}")),
+    }
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let state = paths::service_state_dir().context("preparing the state directory")?;
     let mut args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
         Some("pair") => {
-            let id = identity::load_or_create(&state, "server")?;
-            let (pin, _) = PinFile::new(&state).open_window()?;
-            println!("Pairing is open for 10 minutes. On the client run:\n\n    netusb-client pair <this-host>[:{DEFAULT_PORT}]\n\nand enter this PIN:  {pin}\n\nServer fingerprint: {}", id.fingerprint);
+            let r = control("open_pairing", serde_json::Value::Null).await?;
+            let status = control("status", serde_json::Value::Null).await?;
+            println!(
+                "Pairing is open for 10 minutes. On the client run:\n\n    netusb-client pair <this-host>[:{DEFAULT_PORT}]\n\nand enter this PIN:  {}\n\nServer fingerprint: {}",
+                text(&r, "pin"),
+                text(&status, "fingerprint")
+            );
             return Ok(());
         }
         Some("clients") => {
-            let store = TrustStore::new(&state, "authorized_clients");
-            let all = store.entries();
+            let status = control("status", serde_json::Value::Null).await?;
+            let all = status["clients"].as_array().cloned().unwrap_or_default();
             if all.is_empty() {
                 println!("no paired clients");
             }
-            for (fp, name) in all {
-                println!("{fp}  {name}");
+            for c in all {
+                println!("{}  {}", text(&c, "fingerprint"), text(&c, "name"));
             }
             return Ok(());
         }
         Some("revoke") => {
             let fp = args.get(1).context("usage: netusb-server revoke FINGERPRINT")?;
-            let store = TrustStore::new(&state, "authorized_clients");
-            // Accept an unambiguous prefix so the user need not paste all 64 characters.
-            let matches: Vec<_> = store.entries().into_iter().filter(|(f, _)| f.starts_with(fp.as_str())).collect();
-            match matches.as_slice() {
-                [(f, n)] => {
-                    store.remove(f)?;
-                    println!("revoked {n} ({f})");
-                    return Ok(());
-                }
-                [] => bail!("no paired client matches {fp:?}"),
-                _ => bail!("{fp:?} matches several clients; use more characters"),
-            }
+            let r = control("revoke", serde_json::json!({ "fingerprint": fp })).await?;
+            println!("revoked {}", text(&r, "name"));
+            return Ok(());
         }
         Some("-V") | Some("--version") => {
             println!("netusb-server {}", env!("CARGO_PKG_VERSION"));
@@ -431,6 +487,7 @@ async fn main() -> Result<()> {
         _ => {}
     }
 
+    let state = paths::service_state_dir().context("preparing the state directory")?;
     let mut port = DEFAULT_PORT;
     let mut name = hostname();
     let mut mdns = true;
@@ -479,6 +536,14 @@ async fn main() -> Result<()> {
         let (pin, _) = srv.pin.open_window()?;
         eprintln!("no clients are paired yet: pairing is open for 10 minutes, PIN {pin}");
     }
+
+    let control_srv = srv.clone();
+    let handler = Arc::new(Handler { srv: control_srv, port });
+    tokio::spawn(async move {
+        if let Err(e) = netusb_ipc::serve(netusb_ipc::Service::Server, move |req| handle(handler.clone(), req)).await {
+            eprintln!("control endpoint stopped: {e:#}");
+        }
+    });
 
     // Keep the daemon alive for as long as we serve.
     let _mdns = if mdns {

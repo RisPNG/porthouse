@@ -77,12 +77,17 @@ impl PinFile {
 
     /// The active PIN, if the window is open and not expired.
     pub fn active(&self) -> Option<String> {
+        self.window().map(|(pin, _)| pin)
+    }
+
+    /// The active PIN and the time (seconds since the epoch) at which it expires.
+    pub fn window(&self) -> Option<(String, u64)> {
         let (pin, expires, fails) = self.read()?;
         if now() >= expires || fails >= MAX_PIN_FAILURES {
             let _ = std::fs::remove_file(&self.0);
             return None;
         }
-        Some(pin)
+        Some((pin, expires))
     }
 
     pub fn record_failure(&self) {

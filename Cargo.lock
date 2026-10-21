@@ -570,9 +570,11 @@ dependencies = [
  "anyhow",
  "mdns-sd",
  "netusb-common",
+ "netusb-ipc",
  "netusb-proto",
  "nusb",
  "rustls",
+ "serde_json",
  "tokio",
  "tokio-rustls",
 ]
