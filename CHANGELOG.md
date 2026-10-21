@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.1 (21 October 2026)
 
 ### Changed
 - Porthouse is now released under the 0BSD licence instead of MIT or Apache-2.0.
@@ -9,6 +9,7 @@
 - The Flatpak. It could only hold the window, not the services that do the sharing and attaching, so it needed a host package anyway.
 
 ### Added
+- Every release file has a detached `.asc` signature made with the key in `porthouse-signing.asc`, `SHA256SUMS` is signed too, and the .rpm is signed inside. See [docs/verifying-downloads.md](docs/verifying-downloads.md).
 - The licences of the Rust libraries, Qt, and the usbip-win2 driver are installed with every package and with the Windows installer, and listed in `THIRD-PARTY-LICENSES.md`.
 
 ## 0.3.0 (21 October 2026)
@@ -31,4 +32,4 @@ First public release. The project was called netusb before this release and is n
 - Changing a device's active configuration from the client is not supported.
 - Windows is tested on Windows Server 2022 in CI and on one desktop machine for the server side. The client attach path has not been run on a Windows desktop edition yet.
 - The notification-area icon has been checked in screenshots only, not on real desktops.
-- The Windows installer is not signed yet, and downloads are not signed with a key yet. See [docs/verifying-downloads.md](docs/verifying-downloads.md).
+- The Windows installer is not code signed yet.
