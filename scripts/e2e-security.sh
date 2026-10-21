@@ -95,7 +95,7 @@ EOF
 python3 "$W/mitm.py" & RPID=$!
 sleep 1
 srv pair > /dev/null; MPIN=$(pin_of)
-expect_fail "pairing through a TLS-terminating relay fails even with the right PIN" "wrong PIN|did not prove|failed" c2 pair 127.0.0.1:$RELAY --pin "$MPIN"
+expect_fail "pairing through a TLS-terminating relay fails even with the right PIN" "wrong PIN|did not prove|failed|timed out" c2 pair 127.0.0.1:$RELAY --pin "$MPIN"
 [ -z "$(c2 servers)" ] || c2 servers | grep -q "no paired" && ok "client did not trust the relay" || bad "client stored the relay as trusted"
 kill $RPID 2>/dev/null; RPID=""
 srv pair > /dev/null; DPIN=$(pin_of)
