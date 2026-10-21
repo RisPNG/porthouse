@@ -292,8 +292,8 @@ mod tests {
         assert_eq!(&r[0..2], &[0x01, 0x11], "protocol version 0x0111");
         assert_eq!(&r[2..4], &[0x00, 0x03], "OP_REP_IMPORT");
         assert_eq!(&r[4..8], &[0, 0, 0, 0], "status OK");
-        assert_eq!(&r[8..18], b"porthouse/5-1");
-        assert_eq!(r[18], 0, "path is NUL padded");
+        assert_eq!(&r[8..21], b"porthouse/5-1");
+        assert_eq!(r[21], 0, "path is NUL padded");
         let busid = 8 + 256;
         assert_eq!(
             &r[busid..busid + 7],
