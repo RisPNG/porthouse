@@ -1,0 +1,129 @@
+name: packages
+
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: never
+
+jobs:
+  rust:
+    name: static Linux programs
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: build
+        run: |
+          rustup show
+          rustup target add x86_64-unknown-linux-musl
+          sudo apt-get update -y >/dev/null
+          sudo apt-get install -y musl-tools >/dev/null
+          cargo build --release --locked --target x86_64-unknown-linux-musl -p netusb-server -p netusb-client
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-programs
+          path: |
+            target/x86_64-unknown-linux-musl/release/netusb-server
+            target/x86_64-unknown-linux-musl/release/netusb-clientd
+            target/x86_64-unknown-linux-musl/release/netusb-client
+          if-no-files-found: error
+
+  build:
+    name: build ${{ matrix.flavor }}
+    needs: rust
+    runs-on: ubuntu-24.04
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - flavor: debian-12
+            image: debian:12
+            kind: deb
+            depends: "qt6-qpa-plugins, qml6-module-qtquick, qml6-module-qtquick-controls, qml6-module-qtquick-layouts, qml6-module-qtquick-templates, qml6-module-qtquick-window, qml6-module-qtqml-workerscript, kmod"
+          - flavor: debian-13
+            image: debian:13
+            kind: deb
+            depends: "qt6-qpa-plugins, qml6-module-qtquick, qml6-module-qtquick-controls, qml6-module-qtquick-layouts, qml6-module-qtquick-templates, qml6-module-qtquick-window, qml6-module-qtqml-workerscript, kmod"
+          - flavor: ubuntu-24.04
+            image: ubuntu:24.04
+            kind: deb
+            depends: "qt6-qpa-plugins, qml6-module-qtquick, qml6-module-qtquick-controls, qml6-module-qtquick-layouts, qml6-module-qtquick-templates, qml6-module-qtquick-window, qml6-module-qtqml-workerscript, kmod"
+          - flavor: fedora-43
+            image: fedora:43
+            kind: rpm
+            depends: "qt6-qtdeclarative, kmod"
+    steps:
+      - name: build tools (Debian and Ubuntu)
+        if: matrix.kind == 'deb'
+        run: |
+          apt-get update -y
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            ca-certificates cmake ninja-build g++ file dpkg-dev xz-utils \
+            qt6-base-dev qt6-declarative-dev qt6-declarative-dev-tools libgl1-mesa-dev \
+            qt6-qpa-plugins qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-layouts \
+            qml6-module-qtquick-templates qml6-module-qtquick-window qml6-module-qtqml-workerscript
+      - name: build tools (Fedora)
+        if: matrix.kind == 'rpm'
+        run: |
+          dnf install -y cmake ninja-build gcc-c++ rpm-build file \
+            qt6-qtbase-devel qt6-qtdeclarative-devel mesa-libGL-devel
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-programs
+          path: target/x86_64-unknown-linux-musl/release
+      - name: build and test the program
+        run: |
+          chmod +x target/x86_64-unknown-linux-musl/release/*
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
+            -DNETUSB_PACKAGE_FLAVOR=${{ matrix.flavor }} \
+            -DNETUSB_DEB_DEPENDS="${{ matrix.depends }}" -DNETUSB_RPM_REQUIRES="${{ matrix.depends }}"
+          cmake --build build
+          QT_QPA_PLATFORM=offscreen ctest --test-dir build --output-on-failure
+      - name: package
+        run: |
+          cd build
+          if [ "${{ matrix.kind }}" = deb ]; then cpack -G DEB; else cpack -G RPM; fi
+          ls -l *.deb *.rpm 2>/dev/null
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ matrix.flavor }}
+          path: |
+            build/*.deb
+            build/*.rpm
+          if-no-files-found: error
+
+  verify:
+    name: install ${{ matrix.flavor }}
+    needs: build
+    runs-on: ubuntu-24.04
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {flavor: debian-12, image: 'debian:12', kind: deb}
+          - {flavor: debian-13, image: 'debian:13', kind: deb}
+          - {flavor: ubuntu-24.04, image: 'ubuntu:24.04', kind: deb}
+          - {flavor: fedora-43, image: 'fedora:43', kind: rpm}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: package-${{ matrix.flavor }}
+          path: packages
+      - name: install the package on a clean system
+        run: |
+          if [ "${{ matrix.kind }}" = deb ]; then
+            apt-get update -y
+            DEBIAN_FRONTEND=noninteractive apt-get install -y ./packages/*.deb
+            DEBIAN_FRONTEND=noninteractive apt-get install -y netcat-openbsd openssl xxd python3 >/dev/null
+          else
+            dnf install -y ./packages/*.rpm
+            dnf install -y nmap-ncat openssl vim-common python3 >/dev/null
+          fi
+      - uses: actions/checkout@v4
+      - name: the installed programs work
+        run: ./scripts/ci/package-verify.sh
