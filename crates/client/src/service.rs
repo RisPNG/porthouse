@@ -129,12 +129,18 @@ struct ForgetParams {
 
 async fn handle(app: App, req: Request) -> Result<Value, String> {
     match req.method.as_str() {
-        "state" => Ok(state(&app)),
+        "state" => {
+            if req.params["refresh"] == true {
+                refresh(&app).await;
+            }
+            Ok(state(&app))
+        }
         "add_server" => {
             let addr = clean_addr(&params::<AddrParams>(&req)?.addr)?;
             app.manual.lock().unwrap().insert(addr.clone());
             app.save_manual();
             app.event(format!("added server {addr}"));
+            refresh(&app).await;
             Ok(json!({}))
         }
         "remove_server" => {
@@ -142,6 +148,7 @@ async fn handle(app: App, req: Request) -> Result<Value, String> {
             app.manual.lock().unwrap().remove(&addr);
             app.save_manual();
             app.event(format!("removed server {addr}"));
+            refresh(&app).await;
             Ok(json!({}))
         }
         "pair" => {
@@ -149,6 +156,7 @@ async fn handle(app: App, req: Request) -> Result<Value, String> {
             let addr = clean_addr(&p.addr)?;
             let name = pair(&app.ctx, &addr, &p.pin).await.map_err(|e| format!("{e:#}"))?;
             app.event(format!("paired with {name} ({addr})"));
+            refresh(&app).await;
             Ok(json!({ "name": name }))
         }
         "forget" => {
@@ -158,6 +166,7 @@ async fn handle(app: App, req: Request) -> Result<Value, String> {
                 [(f, n)] => {
                     app.ctx.known.remove(f).map_err(|e| format!("{e:#}"))?;
                     app.event(format!("no longer trusting {n}"));
+                    refresh(&app).await;
                     Ok(json!({}))
                 }
                 [] => Err(format!("no paired server matches {want:?}")),
@@ -291,30 +300,34 @@ async fn probe(ctx: &Ctx, addr: &str) -> ServerView {
     view
 }
 
+async fn refresh(app: &App) {
+    let addrs: BTreeSet<String> = app
+        .discovered
+        .lock()
+        .unwrap()
+        .iter()
+        .chain(app.manual.lock().unwrap().iter())
+        .cloned()
+        .collect();
+    let mut set = tokio::task::JoinSet::new();
+    for a in addrs {
+        let app = app.clone();
+        set.spawn(async move { probe(&app.ctx, &a).await });
+    }
+    let mut views = Vec::new();
+    while let Some(Ok(v)) = set.join_next().await {
+        views.push(v);
+    }
+    // One server can be announced on several addresses; keep the first of each identity.
+    views.sort_by(|a, b| a.addr.cmp(&b.addr));
+    let mut seen = BTreeSet::new();
+    views.retain(|v| v.error.is_some() || seen.insert(v.server_id.clone()));
+    *app.servers.lock().unwrap() = views;
+}
+
 async fn refresh_loop(app: App) {
     loop {
-        let addrs: BTreeSet<String> = app
-            .discovered
-            .lock()
-            .unwrap()
-            .iter()
-            .chain(app.manual.lock().unwrap().iter())
-            .cloned()
-            .collect();
-        let mut set = tokio::task::JoinSet::new();
-        for a in addrs {
-            let app = app.clone();
-            set.spawn(async move { probe(&app.ctx, &a).await });
-        }
-        let mut views = Vec::new();
-        while let Some(Ok(v)) = set.join_next().await {
-            views.push(v);
-        }
-        // One server can be announced on several addresses; keep the first of each identity.
-        views.sort_by(|a, b| a.addr.cmp(&b.addr));
-        let mut seen = BTreeSet::new();
-        views.retain(|v| v.error.is_some() || seen.insert(v.server_id.clone()));
-        *app.servers.lock().unwrap() = views;
+        refresh(&app).await;
         tokio::time::sleep(REFRESH).await;
     }
 }

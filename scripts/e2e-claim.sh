@@ -11,11 +11,10 @@
 set -u
 BUSID=${1:-5-1}
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-SRV=$ROOT/target/debug/netusb-server
-CLI=$ROOT/target/debug/netusb-client
+. "$ROOT/scripts/lib.sh"
 W=$(mktemp -d /tmp/netusb-claim.XXXXXX)
 PORT=7690
-SP=""; HP=""
+SP=""; HP=""; DP=""
 BUS=${BUSID%%-*}
 DEVNUM=$(cat /sys/bus/usb/devices/$BUSID/devnum 2>/dev/null) || { echo "no such device $BUSID" >&2; exit 1; }
 NODE=$(printf '/dev/bus/usb/%03d/%03d' "$BUS" "$DEVNUM")
@@ -39,7 +38,7 @@ try:
 except OSError: pass
 EOF
 }
-cleanup() { [ -n "$HP" ] && kill "$HP" 2>/dev/null; [ -n "$SP" ] && kill "$SP" 2>/dev/null; sleep 0.5; restore; echo "final driver of $BUSID:1.0: $(drv)"; rm -rf "$W"; }
+cleanup() { [ -n "$DP" ] && kill "$DP" 2>/dev/null; [ -n "$HP" ] && kill "$HP" 2>/dev/null; [ -n "$SP" ] && kill "$SP" 2>/dev/null; sleep 0.5; restore; echo "final driver of $BUSID:1.0: $(drv)"; rm -rf "$W"; }
 trap cleanup EXIT
 
 # A scripted client that reuses the paired client certificate to attach and then sits there.
@@ -58,11 +57,13 @@ EOF
 
 mkdir -p "$W/s" "$W/c"
 # NOTE: launch the binaries directly (not through a shell function) so $! is the real PID.
-start_server() { NETUSB_STATE_DIR=$W/s "$SRV" run --no-mdns --port $PORT >> "$W/server.log" 2>&1 & SP=$!; sleep 1.5; }
+start_server() { NETUSB_STATE_DIR=$W/s NETUSB_IPC_DIR=$W/s/ipc "$SRV" run --no-mdns --port $PORT >> "$W/server.log" 2>&1 & SP=$!; wait_service "$W/s" server; }
 
 start_server
-PIN=$(NETUSB_STATE_DIR=$W/s "$SRV" pair | sed -n 's/.*PIN:  \([0-9-]*\).*/\1/p')
-NETUSB_STATE_DIR=$W/c "$CLI" pair 127.0.0.1:$PORT --pin "$PIN" > /dev/null || { echo "pairing failed"; exit 1; }
+NETUSB_STATE_DIR=$W/c NETUSB_IPC_DIR=$W/c/ipc "$CLID" run > "$W/clientd.log" 2>&1 & DP=$!
+wait_service "$W/c" client
+PIN=$(sv "$W/s" pair | pin_from)
+cl "$W/c" pair 127.0.0.1:$PORT --pin "$PIN" > /dev/null || { echo "pairing failed"; exit 1; }
 BEFORE=$(drv); echo "device $BUSID ($NODE) starts on driver '$BEFORE'"
 [ -n "$BEFORE" ] || { echo "device has no host driver to restore; pick another" >&2; exit 1; }
 

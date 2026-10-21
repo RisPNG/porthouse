@@ -13,8 +13,7 @@
 set -u
 BUSID=${1:-5-1}
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-SRV=$ROOT/target/debug/netusb-server
-CLI=$ROOT/target/debug/netusb-client
+. "$ROOT/scripts/lib.sh"
 W=$(mktemp -d /tmp/netusb-winpath.XXXXXX)
 PORT=7695
 SP=""; CP=""
@@ -98,19 +97,20 @@ while s.recv(4096): pass          # like the driver: stay until the connection g
 EOF
 chmod +x "$W/fake-usbip"
 
-NETUSB_STATE_DIR=$W/s "$SRV" run --no-mdns --port $PORT > "$W/server.log" 2>&1 & SP=$!
-sleep 1.5
-PIN=$(NETUSB_STATE_DIR=$W/s "$SRV" pair | sed -n 's/.*PIN:  \([0-9-]*\).*/\1/p')
-NETUSB_STATE_DIR=$W/c "$CLI" pair 127.0.0.1:$PORT --pin "$PIN" > /dev/null || { echo "pairing failed"; exit 1; }
+NETUSB_STATE_DIR=$W/s NETUSB_IPC_DIR=$W/s/ipc "$SRV" run --no-mdns --port $PORT > "$W/server.log" 2>&1 & SP=$!
+FAKE_OUT=$W/out NETUSB_STATE_DIR=$W/c NETUSB_IPC_DIR=$W/c/ipc "$CLID" run --importer "$W/fake-usbip" > "$W/client.log" 2>&1 & CP=$!
+wait_service "$W/s" server && wait_service "$W/c" client || exit 1
+PIN=$(sv "$W/s" pair | pin_from)
+cl "$W/c" pair 127.0.0.1:$PORT --pin "$PIN" > /dev/null || { echo "pairing failed"; exit 1; }
 BEFORE=$(drv); echo "device $BUSID starts on driver '$BEFORE'"
 [ -n "$BEFORE" ] || { echo "device has no host driver to restore; pick another" >&2; exit 1; }
 
-FAKE_OUT=$W/out NETUSB_STATE_DIR=$W/c "$CLI" use 127.0.0.1:$PORT "$BUSID" --importer "$W/fake-usbip" > "$W/client.log" 2>&1 & CP=$!
+cl "$W/c" use 127.0.0.1:$PORT "$BUSID" > "$W/use.log" 2>&1
 for _ in $(seq 1 60); do [ -e "$W/out/done" ] && break; sleep 0.25; done
 
 echo "== handshake and descriptors through the full chain =="
 [ -e "$W/out/done" ] && ok "the fake driver completed its URB exchange" || { bad "no completion; client log: $(cat "$W/client.log")"; }
-grep -q "attached $BUSID" "$W/client.log" && ok "client reports the device attached" || bad "client log: $(cat "$W/client.log")"
+grep -q "attached $BUSID" "$W/use.log" && ok "client reports the device attached" || bad "client log: $(cat "$W/use.log" "$W/client.log")"
 [ "$(drv)" = "usbfs" ] && ok "server claimed the device from its host driver" || bad "driver is '$(drv)'"
 SYS=/sys/bus/usb/devices/$BUSID/descriptors
 cmp -s <(head -c 18 "$SYS") "$W/out/dev.bin" && ok "device descriptor is byte-identical to the kernel's (18 bytes)" || bad "device descriptor differs: $(xxd -p "$W/out/dev.bin" 2>/dev/null)"
@@ -141,7 +141,7 @@ EOF
 
 echo "== release =="
 kill -TERM $CP; for _ in $(seq 1 20); do kill -0 $CP 2>/dev/null || break; sleep 0.25; done
-kill -0 $CP 2>/dev/null && bad "client did not exit on SIGTERM" || ok "client exited on SIGTERM"
+kill -0 $CP 2>/dev/null && bad "client service did not exit on SIGTERM" || ok "client service released the device and exited on SIGTERM"
 CP=""
 [ "$(cat "$W/out/detach.txt" 2>/dev/null)" = "detach -p 9" ] && ok "client asked the importer to detach its port" || bad "detach call: '$(cat "$W/out/detach.txt" 2>/dev/null)'"
 sleep 1.5

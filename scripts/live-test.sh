@@ -6,7 +6,7 @@
 #
 #   sudo ./scripts/live-test.sh [BUSID] [SECONDS]
 #
-# BUSID defaults to 5-1 (list yours with: ./target/debug/netusb-client list --host 127.0.0.1).
+# BUSID defaults to 5-1 (list yours with: ./target/debug/netusb-client list while the test runs).
 # After SECONDS (default 30) everything is torn down and the device is handed back to the host.
 # Use a device you can afford to lose for that long (a second mouse is ideal), and keep a
 # keyboard within reach.
@@ -16,13 +16,12 @@ BUSID=${1:-5-1}
 SECS=${2:-30}
 PORT=7620
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-SRV=$ROOT/target/debug/netusb-server
-CLI=$ROOT/target/debug/netusb-client
+. "$ROOT/scripts/lib.sh"
 OUT=${TMPDIR:-/tmp}/netusb-live
 SP=""; CP=""
 
 if [ "$(id -u)" -ne 0 ]; then echo "run as root: sudo $0 $*" >&2; exit 1; fi
-[ -x "$SRV" ] && [ -x "$CLI" ] || { echo "build first: cargo build" >&2; exit 1; }
+[ -x "$SRV" ] && [ -x "$CLI" ] && [ -x "$CLID" ] || { echo "build first: cargo build" >&2; exit 1; }
 mkdir -p "$OUT"; : > "$OUT/server.log"; : > "$OUT/client.log"
 
 restore() {
@@ -38,25 +37,29 @@ restore() {
   for i in /sys/bus/usb/devices/"$BUSID":*; do
     [ -e "$i" ] && echo "$(basename "$i") driver: $(readlink "$i/driver" 2>/dev/null | sed 's|.*/||')"
   done
+  rm -rf "$T"
   echo "logs: $OUT/server.log  $OUT/client.log"
 }
 trap restore EXIT
 
 modprobe vhci-hcd || { echo "could not load vhci-hcd" >&2; exit 1; }
 
-NETUSB_TRACE=1 "$SRV" --no-mdns --port $PORT > "$OUT/server.log" 2>&1 & SP=$!
-sleep 1.5
+T=$(mktemp -d /tmp/netusb-live.XXXXXX)
+NETUSB_TRACE=1 NETUSB_STATE_DIR=$T/s NETUSB_IPC_DIR=$T/s/ipc "$SRV" --no-mdns --port $PORT > "$OUT/server.log" 2>&1 & SP=$!
+NETUSB_STATE_DIR=$T/c NETUSB_IPC_DIR=$T/c/ipc "$CLID" run > "$OUT/clientd.log" 2>&1 & CP=$!
+wait_service "$T/s" server && wait_service "$T/c" client || exit 1
 echo "=== pairing (encrypted; PIN-authenticated) ==="
-PIN=$("$SRV" pair | sed -n 's/.*PIN:  \([0-9-]*\).*/\1/p')
+PIN=$(sv "$T/s" pair | pin_from)
 [ -n "$PIN" ] || { echo "could not open a pairing window" >&2; exit 1; }
-"$CLI" pair 127.0.0.1:$PORT --pin "$PIN" || exit 1
+cl "$T/c" pair 127.0.0.1:$PORT --pin "$PIN" || exit 1
+cl "$T/c" add 127.0.0.1:$PORT
 echo
 echo "=== devices the server sees ==="
-"$CLI" list --host 127.0.0.1:$PORT || exit 1
+cl "$T/c" list || exit 1
 
 echo
 echo "=== attaching $BUSID for ${SECS}s ==="
-timeout "$SECS" "$CLI" use 127.0.0.1:$PORT "$BUSID" > "$OUT/client.log" 2>&1 & CP=$!
+cl "$T/c" use 127.0.0.1:$PORT "$BUSID" --seconds "$SECS" > "$OUT/client.log" 2>&1
 sleep 4
 cat "$OUT/client.log"
 echo
@@ -73,7 +76,7 @@ echo "=== input devices created by vhci_hcd (this is the device arriving over ne
 grep -B3 -A6 "vhci_hcd" /proc/bus/input/devices || echo "(none)"
 echo
 echo ">>> MOVE THE MOUSE NOW. It should still move the pointer. (${SECS}s window) <<<"
-wait "$CP" 2>/dev/null
+sleep "$SECS"
 echo
 echo "=== recent kernel messages ==="
 dmesg | tail -40 | grep -i -E "vhci|usb 8|usb 9|usbhid|input" | tail -15

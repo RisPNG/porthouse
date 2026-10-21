@@ -4,16 +4,13 @@
 # Needs root and the vhci-hcd kernel module. Run from the repository root after `cargo build`.
 set -u
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
-SRV=$ROOT/target/debug/netusb-server
-CLI=$ROOT/target/debug/netusb-client
-BIN_DIR=${BIN_DIR:-}
-[ -n "$BIN_DIR" ] && { SRV=$BIN_DIR/netusb-server; CLI=$BIN_DIR/netusb-client; }
+. "$ROOT/scripts/lib.sh"
 W=$(mktemp -d /tmp/netusb-linux-attach.XXXXXX)
 PORT=7600
 PASS=0; FAIL=0; SP=""; CP=""
 ok()  { echo "  PASS  $1"; PASS=$((PASS+1)); }
 bad() { echo "  FAIL  $1"; FAIL=$((FAIL+1)); }
-cleanup() { [ -n "$CP" ] && kill "$CP" 2>/dev/null; [ -n "$SP" ] && kill "$SP" 2>/dev/null; sleep 0.5; echo "--- server log"; cat "$W/server.log" 2>/dev/null; echo "--- client output"; cat "$W/use.out" "$W/use.err" 2>/dev/null; }
+cleanup() { [ -n "$CP" ] && kill "$CP" 2>/dev/null; [ -n "$SP" ] && kill "$SP" 2>/dev/null; sleep 0.5; echo "--- server log"; cat "$W/server.log" 2>/dev/null; echo "--- client service log"; cat "$W/clientd.log" 2>/dev/null; echo "--- client output"; cat "$W/use.out" "$W/use.err" 2>/dev/null; }
 trap cleanup EXIT
 [ "$(id -u)" -eq 0 ] || { echo "run as root" >&2; exit 1; }
 
@@ -35,14 +32,16 @@ modprobe hid-generic 2>/dev/null || true
 
 echo "== server, pairing"
 mkdir -p "$W/s" "$W/c"
-NETUSB_STATE_DIR=$W/s "$SRV" run --no-mdns --port $PORT --test-device mouse > "$W/server.log" 2>&1 & SP=$!
-sleep 1.5
-PIN=$(NETUSB_STATE_DIR=$W/s "$SRV" pair | sed -n 's/.*PIN:  \([0-9-]*\).*/\1/p')
-NETUSB_STATE_DIR=$W/c "$CLI" pair 127.0.0.1:$PORT --pin "$PIN" > /dev/null && ok "paired" || bad "pairing"
-NETUSB_STATE_DIR=$W/c "$CLI" list --host 127.0.0.1:$PORT | grep -q '99-1' && ok "virtual mouse is listed" || bad "virtual mouse not listed"
+NETUSB_STATE_DIR=$W/s NETUSB_IPC_DIR=$W/s/ipc "$SRV" run --no-mdns --port $PORT --test-device mouse > "$W/server.log" 2>&1 & SP=$!
+NETUSB_STATE_DIR=$W/c NETUSB_IPC_DIR=$W/c/ipc "$CLID" run > "$W/clientd.log" 2>&1 & CP=$!
+wait_service "$W/s" server && wait_service "$W/c" client || exit 1
+PIN=$(sv "$W/s" pair | pin_from)
+cl "$W/c" pair 127.0.0.1:$PORT --pin "$PIN" > /dev/null && ok "paired" || bad "pairing"
+cl "$W/c" add 127.0.0.1:$PORT
+cl "$W/c" list | grep -q '99-1' && ok "virtual mouse is listed" || bad "virtual mouse not listed"
 
-echo "== attach for 40 seconds"
-NETUSB_STATE_DIR=$W/c "$CLI" use 127.0.0.1:$PORT 99-1 --seconds 40 > "$W/use.out" 2> "$W/use.err" & CP=$!
+echo "== attach"
+cl "$W/c" use 127.0.0.1:$PORT 99-1 --seconds 120 > "$W/use.out" 2> "$W/use.err"
 for _ in $(seq 1 30); do grep -q attached "$W/use.out" && break; sleep 1; done
 grep -q attached "$W/use.out" && ok "client reports the device attached" || bad "client never attached"
 # Enumeration and driver binding take a moment; wait for the input device instead of guessing.
@@ -113,7 +112,7 @@ else
 fi
 
 echo "== release"
-wait $CP 2>/dev/null; CP=""
+cl "$W/c" release 127.0.0.1:$PORT 99-1 > /dev/null
 sleep 2
 lsusb 2>/dev/null | grep -qi 1209:0001 && bad "device still present after release" || ok "virtual device is gone after release"
 grep -q "released 99-1" "$W/server.log" && ok "server saw the release" || bad "server did not log the release"

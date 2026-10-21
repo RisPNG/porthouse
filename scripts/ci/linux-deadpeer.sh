@@ -4,8 +4,7 @@
 # the server notices (TCP keepalive) and releases the device. Needs root and iptables.
 set -u
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
-SRV=${NETUSB_BIN_DIR:-$ROOT/target/debug}/netusb-server
-CLI=${NETUSB_BIN_DIR:-$ROOT/target/debug}/netusb-client
+. "$ROOT/scripts/lib.sh"
 W=$(mktemp -d /tmp/netusb-deadpeer.XXXXXX)
 PORT=7730
 PASS=0; FAIL=0; PIDS=()
@@ -21,10 +20,11 @@ trap cleanup EXIT
 command -v iptables >/dev/null || { echo "iptables is needed" >&2; exit 3; }
 mkdir -p "$W/s" "$W/c"
 
-NETUSB_STATE_DIR=$W/s "$SRV" run --no-mdns --port $PORT --test-device mouse > "$W/server.log" 2>&1 & PIDS+=($!)
-sleep 1.5
-PIN=$(NETUSB_STATE_DIR=$W/s "$SRV" pair | sed -n 's/.*PIN:  \([0-9-]*\).*/\1/p')
-NETUSB_STATE_DIR=$W/c "$CLI" pair 127.0.0.1:$PORT --pin "$PIN" > /dev/null && ok "paired" || bad "pairing"
+NETUSB_STATE_DIR=$W/s NETUSB_IPC_DIR=$W/s/ipc "$SRV" run --no-mdns --port $PORT --test-device mouse > "$W/server.log" 2>&1 & PIDS+=($!)
+NETUSB_STATE_DIR=$W/c NETUSB_IPC_DIR=$W/c/ipc "$CLID" run > "$W/clientd.log" 2>&1 & PIDS+=($!)
+wait_service "$W/s" server && wait_service "$W/c" client || exit 1
+PIN=$(sv "$W/s" pair | pin_from)
+cl "$W/c" pair 127.0.0.1:$PORT --pin "$PIN" > /dev/null && ok "paired" || bad "pairing"
 
 # A scripted client: attach the virtual mouse, then go completely silent but keep the socket open.
 cat > "$W/hold.py" <<'PY'
@@ -58,5 +58,5 @@ else
 fi
 
 iptables -D INPUT -p tcp --dport $PORT -j DROP; iptables -D INPUT -p tcp --sport $PORT -j DROP
-NETUSB_STATE_DIR=$W/c "$CLI" list --host 127.0.0.1:$PORT 2>&1 | grep '99-1' | grep -q 'in use by' && bad "the device still shows as in use" || ok "the device is free to be used again"
+cl "$W/c" add 127.0.0.1:$PORT; cl "$W/c" list 2>&1 | grep '99-1' | grep -q 'in use by' && bad "the device still shows as in use" || ok "the device is free to be used again"
 echo; echo "result: $PASS passed, $FAIL failed"; [ $FAIL -eq 0 ]

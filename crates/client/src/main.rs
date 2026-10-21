@@ -109,7 +109,7 @@ async fn main() -> Result<()> {
 
     let mut c = Client::connect(Service::Client).await?;
     match cmd.as_deref() {
-        Some("list") | Some("status") | None => print_state(&c.call("state", Value::Null).await?),
+        Some("list") | Some("status") | None => print_state(&c.call("state", json!({ "refresh": true })).await?),
         Some("servers") => {
             let state = c.call("state", Value::Null).await?;
             let known = state["known"].as_array().cloned().unwrap_or_default();
