@@ -19,7 +19,7 @@ Download the file for your system from the Releases page.
 | Debian 12 or 13, Ubuntu 24.04 | `netusb-<system>-<version>-amd64.deb` | `sudo apt install ./netusb-*.deb` |
 | Fedora 43 | `netusb-fedora-43-<version>-x86_64.rpm` | `sudo dnf install ./netusb-*.rpm` |
 | Arch Linux | `PKGBUILD` in `packaging/arch` | `makepkg -si` in that directory |
-| Any Linux, program only | `netusb.flatpak` | `flatpak install netusb.flatpak` |
+| Any Linux, program only | `netusb-<version>-x86_64.flatpak` | `flatpak install netusb-*.flatpak` |
 | Windows 10 or 11 (x64) | `netusb-<version>-windows-x64-setup.exe` | run it |
 
 The Linux packages start both services and add the program to the application menu. The Windows installer asks which parts to install, installs the usbip-win2 driver when this computer will use devices, opens the firewall for sharing, and starts the services. The installer is not code signed yet, so Windows SmartScreen asks for confirmation.

@@ -4,6 +4,7 @@ on:
   push:
     branches: ['**']
   workflow_dispatch:
+  workflow_call:
 
 env:
   CARGO_TERM_COLOR: never
