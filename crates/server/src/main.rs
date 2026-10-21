@@ -481,13 +481,59 @@ async fn main() -> Result<()> {
             usage();
             return Ok(());
         }
+        #[cfg(windows)]
+        Some("service") => return windows_service_main(),
+        #[cfg(windows)]
+        Some("install-service") => {
+            netusb_common::winsvc::install(
+                SERVICE_NAME,
+                "netusb server",
+                "Shares this computer's USB devices with paired computers.",
+                &[],
+            )?;
+            println!("service {SERVICE_NAME} installed and started");
+            return Ok(());
+        }
+        #[cfg(windows)]
+        Some("uninstall-service") => {
+            netusb_common::winsvc::uninstall(SERVICE_NAME)?;
+            println!("service {SERVICE_NAME} removed");
+            return Ok(());
+        }
         Some("run") => {
             args.remove(0);
         }
         _ => {}
     }
 
-    let state = paths::service_state_dir().context("preparing the state directory")?;
+    let opts = parse_options(args)?;
+    serve_until(opts, netusb_common::shutdown::console_signal()).await
+}
+
+#[cfg(windows)]
+const SERVICE_NAME: &str = "netusb-server";
+
+#[cfg(windows)]
+fn windows_service_main() -> Result<()> {
+    if let Ok(dir) = paths::service_state_dir() {
+        let _ = netusb_common::winsvc::log_to(&dir.join("server.log"));
+    }
+    netusb_common::winsvc::dispatch(SERVICE_NAME, |stop| {
+        let opts = parse_options(Vec::new())?;
+        tokio::runtime::Runtime::new()?.block_on(serve_until(opts, async {
+            let _ = stop.await;
+        }))
+    })
+}
+
+struct Options {
+    port: u16,
+    name: String,
+    mdns: bool,
+    test_devices: Vec<emulated::Kind>,
+}
+
+fn parse_options(args: Vec<String>) -> Result<Options> {
     let mut port = DEFAULT_PORT;
     let mut name = hostname();
     let mut mdns = true;
@@ -509,7 +555,22 @@ async fn main() -> Result<()> {
             other => bail!("unknown argument {other:?} (see --help)"),
         }
     }
+    Ok(Options {
+        port,
+        name,
+        mdns,
+        test_devices,
+    })
+}
 
+async fn serve_until(opts: Options, shutdown: impl std::future::Future<Output = ()>) -> Result<()> {
+    let Options {
+        port,
+        name,
+        mdns,
+        test_devices,
+    } = opts;
+    let state = paths::service_state_dir().context("preparing the state directory")?;
     let id = identity::load_or_create(&state, "server")?;
     let acceptor = TlsAcceptor::from(server_config(&id)?);
     let (stop_tx, stop_rx) = tokio::sync::watch::channel(false);
@@ -557,13 +618,8 @@ async fn main() -> Result<()> {
         None
     };
 
-    #[cfg(unix)]
-    let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+    tokio::pin!(shutdown);
     loop {
-        #[cfg(unix)]
-        let stop = async { term.recv().await };
-        #[cfg(not(unix))]
-        let stop = std::future::pending::<Option<()>>();
         tokio::select! {
             accepted = listener.accept() => {
                 let (sock, peer) = accepted?;
@@ -576,8 +632,7 @@ async fn main() -> Result<()> {
                     }
                 });
             }
-            _ = tokio::signal::ctrl_c() => break,
-            _ = stop => break,
+            _ = &mut shutdown => break,
         }
     }
 

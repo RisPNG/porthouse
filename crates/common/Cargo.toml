@@ -14,3 +14,7 @@ sha2 = "0.11.1"
 socket2 = { version = "0.6.5", features = ["all"] }
 subtle = "2.6.1"
 thiserror = "2.0.21"
+tokio = { version = "1.54.0", features = ["signal", "sync"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-service = "0.8.0"
