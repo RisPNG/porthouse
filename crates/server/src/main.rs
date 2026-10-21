@@ -382,7 +382,7 @@ netusb-server revoke FINGERPRINT                           remove a paired clien
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let state = paths::server_state_dir().context("preparing the state directory")?;
+    let state = paths::service_state_dir().context("preparing the state directory")?;
     let mut args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
         Some("pair") => {

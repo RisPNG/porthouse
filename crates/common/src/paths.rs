@@ -12,7 +12,7 @@ use std::path::PathBuf;
 /// and `%ProgramData%\netusb`. This deliberately ignores `SUDO_USER`: `sudo netusb-server pair` has
 /// to reach the very directory the service reads. A server run by an ordinary user keeps its state
 /// in that user's own directory, like the client.
-pub fn server_state_dir() -> std::io::Result<PathBuf> {
+pub fn service_state_dir() -> std::io::Result<PathBuf> {
     #[cfg(unix)]
     if std::env::var_os("NETUSB_STATE_DIR").is_none() && is_root() {
         let dir = PathBuf::from("/var/lib/netusb");

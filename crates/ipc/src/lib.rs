@@ -113,11 +113,23 @@ where
             Ok(req) => {
                 let id = req.id;
                 match handler(req).await {
-                    Ok(result) => Reply { id, result: Some(result), error: None },
-                    Err(error) => Reply { id, result: None, error: Some(error) },
+                    Ok(result) => Reply {
+                        id,
+                        result: Some(result),
+                        error: None,
+                    },
+                    Err(error) => Reply {
+                        id,
+                        result: None,
+                        error: Some(error),
+                    },
                 }
             }
-            Err(e) => Reply { id: 0, result: None, error: Some(format!("malformed request: {e}")) },
+            Err(e) => Reply {
+                id: 0,
+                result: None,
+                error: Some(format!("malformed request: {e}")),
+            },
         };
         let mut out = serde_json::to_vec(&reply)?;
         out.push(b'\n');
@@ -135,13 +147,21 @@ pub struct Client {
 impl Client {
     pub async fn connect(service: Service) -> Result<Client> {
         let (r, w) = transport::connect(service).await?;
-        Ok(Client { reader: BufReader::new(r), writer: w, next_id: 1 })
+        Ok(Client {
+            reader: BufReader::new(r),
+            writer: w,
+            next_id: 1,
+        })
     }
 
     pub async fn call(&mut self, method: &str, params: Value) -> Result<Value> {
         let id = self.next_id;
         self.next_id += 1;
-        let mut out = serde_json::to_vec(&Request { id, method: method.into(), params })?;
+        let mut out = serde_json::to_vec(&Request {
+            id,
+            method: method.into(),
+            params,
+        })?;
         out.push(b'\n');
         self.writer.write_all(&out).await?;
         let mut line = String::new();
@@ -178,7 +198,12 @@ mod tests {
             }
         };
         assert_eq!(c.call("echo", serde_json::json!({"a": 1})).await.unwrap()["a"], 1);
-        assert!(c.call("nope", Value::Null).await.unwrap_err().to_string().contains("unknown method"));
+        assert!(c
+            .call("nope", Value::Null)
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("unknown method"));
         assert_eq!(c.call("echo", serde_json::json!("again")).await.unwrap(), "again");
         let _ = std::fs::remove_dir_all(&dir);
     }

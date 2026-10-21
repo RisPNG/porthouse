@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-pub mod daemon;
+pub mod service;
 pub mod usbip_tool;
 #[cfg(target_os = "linux")]
 pub mod vhci;
@@ -10,7 +10,7 @@ use netusb_common::identity::{self, Identity};
 use netusb_common::paths;
 use netusb_common::tls::{client_config, peer_fingerprint, server_name, session_binding};
 use netusb_common::trust::{self, Role, TrustStore};
-use netusb_proto::{decode_frame, encode_frame, AttachInfo, ClientMsg, DeviceInfo, ServerMsg, DEFAULT_PORT, MDNS_SERVICE, PROTO_VERSION};
+use netusb_proto::{decode_frame, encode_frame, AttachInfo, ClientMsg, ServerMsg, DEFAULT_PORT, PROTO_VERSION};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio_rustls::client::TlsStream;
@@ -25,7 +25,7 @@ pub struct Ctx {
 
 impl Ctx {
     pub fn load() -> Result<Ctx> {
-        let dir = paths::state_dir().context("preparing the state directory")?;
+        let dir = paths::service_state_dir().context("preparing the state directory")?;
         let id = identity::load_or_create(&dir, "client")?;
         let connector = TlsConnector::from(client_config(&id)?);
         Ok(Ctx {
@@ -71,10 +71,7 @@ impl Conn {
             )
         };
         if require_known && !ctx.known.contains(&server_fp) {
-            bail!(
-                "{addr} is not a paired server (fingerprint {}). Pair first with: netusb-client pair {addr}",
-                &server_fp[..16]
-            );
+            bail!("{addr} is not a paired server (fingerprint {}). Pair it first", &server_fp[..16]);
         }
         Ok(Conn {
             sock,
@@ -126,38 +123,14 @@ impl Conn {
     }
 }
 
-pub struct Listing {
-    pub server_name: String,
-    pub server_id: String,
-    pub addr: String,
-    pub devices: Vec<DeviceInfo>,
-}
-
-pub async fn query(ctx: &Ctx, addr: &str) -> Result<Listing> {
-    let mut c = Conn::open(ctx, addr, true).await?;
-    let hello = c.hello().await?;
-    if !hello.authorized {
-        bail!("this client is no longer authorized on the server; pair again with: netusb-client pair {addr}");
-    }
-    let devices = match c.call(&ClientMsg::ListDevices).await? {
-        ServerMsg::Devices(d) => d,
-        ServerMsg::Error { message, .. } => bail!("server error: {message}"),
-        other => bail!("unexpected reply to list: {other:?}"),
-    };
-    Ok(Listing {
-        server_name: hello.name,
-        server_id: hello.id,
-        addr: addr.to_string(),
-        devices,
-    })
-}
-
+/// The name this machine shows to servers.
 pub fn whoami() -> String {
-    // Under sudo the invoking user is the more meaningful name.
-    std::env::var("SUDO_USER")
-        .or_else(|_| std::env::var("USER"))
-        .or_else(|_| std::env::var("USERNAME"))
-        .unwrap_or_else(|_| "unknown".into())
+    std::fs::read_to_string("/proc/sys/kernel/hostname")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .or_else(|| std::env::var("COMPUTERNAME").ok())
+        .unwrap_or_else(|| "netusb-client".into())
 }
 
 pub fn with_default_port(h: String) -> String {
@@ -168,52 +141,15 @@ pub fn with_default_port(h: String) -> String {
     }
 }
 
-/// Browse mDNS for a short window and return every resolved `host:port`.
-pub fn discover(window: Duration) -> Result<Vec<String>> {
-    let daemon = mdns_sd::ServiceDaemon::new().context("starting mDNS daemon")?;
-    let rx = daemon.browse(MDNS_SERVICE).context("browsing mDNS")?;
-    let deadline = std::time::Instant::now() + window;
-    let mut found = Vec::new();
-    while let Some(left) = deadline.checked_duration_since(std::time::Instant::now()) {
-        match rx.recv_timeout(left) {
-            Ok(mdns_sd::ServiceEvent::ServiceResolved(info)) => {
-                // Prefer IPv4: it is what every platform can route without scope ids.
-                if let Some(ip) = info.get_addresses_v4().into_iter().next() {
-                    let addr = format!("{}:{}", ip, info.get_port());
-                    if !found.contains(&addr) {
-                        found.push(addr);
-                    }
-                }
-            }
-            Ok(_) => {}
-            Err(_) => break,
-        }
-    }
-    let _ = daemon.shutdown();
-    Ok(found)
-}
-
 /// Establish trust with a server: prove we know the PIN it shows, and check it proves the same.
-pub async fn cmd_pair(ctx: &Ctx, addr: &str, pin_arg: Option<String>) -> Result<()> {
+/// Returns the server's name.
+pub async fn pair(ctx: &Ctx, addr: &str, pin_text: &str) -> Result<String> {
     let mut c = Conn::open(ctx, addr, false).await?;
     let hello = c.hello().await?;
     if hello.authorized && ctx.known.contains(&c.server_fp) {
-        println!("already paired with {} ({})", hello.name, addr);
-        return Ok(());
+        return Ok(hello.name);
     }
-    println!("server {:?} at {addr}, fingerprint {}", hello.name, &c.server_fp[..16]);
-
-    let raw = match pin_arg {
-        Some(p) => p,
-        None => {
-            eprint!("PIN shown by `netusb-server pair` on that machine: ");
-            let mut line = String::new();
-            std::io::stdin().read_line(&mut line)?;
-            line
-        }
-    };
-    let pin = trust::normalize_pin(&raw).context("the PIN is 8 digits, like 1234-5678")?;
-
+    let pin = trust::normalize_pin(pin_text).context("the PIN is 8 digits, like 1234-5678")?;
     let proof = trust::proof(&pin, &c.binding, Role::Client, &ctx.id.fingerprint);
     match c.call(&ClientMsg::Pair { proof }).await? {
         ServerMsg::Paired { proof } => {
@@ -223,8 +159,7 @@ pub async fn cmd_pair(ctx: &Ctx, addr: &str, pin_arg: Option<String>) -> Result<
                 bail!("the server did not prove it knows the PIN. NOT trusting it (possible impersonation)");
             }
             ctx.known.add(&c.server_fp, &hello.name)?;
-            println!("paired with {:?}. You can now run: netusb-client list", hello.name);
-            Ok(())
+            Ok(hello.name)
         }
         ServerMsg::Error { message, .. } => bail!("pairing failed: {message}"),
         other => bail!("unexpected reply to pairing: {other:?}"),
@@ -259,7 +194,7 @@ async fn negotiate(ctx: &Ctx, addr: &str, busid: &str) -> Result<(ServerHello, A
     let mut c = Conn::open(ctx, addr, true).await?;
     let hello = c.hello().await?;
     if !hello.authorized {
-        bail!("this client is no longer authorized on the server; pair again with: netusb-client pair {addr}");
+        bail!("this client is no longer authorized on the server; pair it again");
     }
     let info: AttachInfo = match c.call(&ClientMsg::Attach { busid: busid.to_string() }).await? {
         ServerMsg::Attached(i) => i,
@@ -357,101 +292,5 @@ impl Established {
             }
         }
         reason
-    }
-}
-
-/// Open `url` in the user's default browser. Only ever called with the daemon's own loopback URL.
-pub fn open_in_browser(url: &str) -> Result<()> {
-    if !url.starts_with("http://127.0.0.1:") {
-        bail!("refusing to open a non-local address");
-    }
-    #[cfg(windows)]
-    let mut cmd = {
-        use std::os::windows::process::CommandExt;
-        let mut c = std::process::Command::new("cmd");
-        c.args(["/c", "start", "", url]).creation_flags(0x0800_0000); // CREATE_NO_WINDOW
-        c
-    };
-    #[cfg(target_os = "macos")]
-    let mut cmd = {
-        let mut c = std::process::Command::new("open");
-        c.arg(url);
-        c
-    };
-    #[cfg(not(any(windows, target_os = "macos")))]
-    let mut cmd = {
-        let mut c = std::process::Command::new("xdg-open");
-        c.arg(url);
-        c
-    };
-    cmd.spawn().context("could not start the browser opener")?;
-    Ok(())
-}
-
-/// Open the web interface of the running daemon (its sign-in address is saved by `gui`).
-pub fn cmd_open() -> Result<()> {
-    let file = paths::state_dir()?.join("ui.url");
-    let url = std::fs::read_to_string(&file)
-        .with_context(|| format!("no running interface found ({}). Start it with: netusb-client gui", file.display()))?;
-    let url = url.trim();
-    println!("{url}");
-    open_in_browser(url)
-}
-
-/// CLI wrapper: attach and hold until Ctrl-C / SIGTERM.
-pub async fn cmd_use(ctx: &Ctx, addr: &str, busid: &str, importer: Option<std::path::PathBuf>, seconds: Option<u64>) -> Result<()> {
-    let est = match importer {
-        Some(exe) => establish_with_tool(ctx, addr, busid, exe).await?,
-        None => establish(ctx, addr, busid).await?,
-    };
-    println!(
-        "attached {busid} ({:04x}:{:04x}) from {} on virtual port {}; press Ctrl-C to release",
-        est.info.vendor_id, est.info.product_id, est.server_name, est.port
-    );
-    #[cfg(unix)]
-    let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
-    let limit = async {
-        match seconds {
-            Some(s) => tokio::time::sleep(std::time::Duration::from_secs(s)).await,
-            None => std::future::pending::<()>().await,
-        }
-    };
-    let stop = async {
-        #[cfg(unix)]
-        tokio::select! {
-            _ = tokio::signal::ctrl_c() => {}
-            _ = term.recv() => {}
-            _ = limit => {}
-        }
-        #[cfg(not(unix))]
-        tokio::select! {
-            _ = tokio::signal::ctrl_c() => {}
-            _ = limit => {}
-        }
-    };
-    let why = est.relay(stop).await;
-    eprintln!("{why}");
-    Ok(())
-}
-
-pub fn print_listing(l: &Listing) {
-    println!("{} ({})  [{}]", l.server_name, l.addr, &l.server_id[..l.server_id.len().min(8)]);
-    if l.devices.is_empty() {
-        println!("   (no shareable devices)");
-    }
-    for d in &l.devices {
-        let name = match (&d.manufacturer, &d.product) {
-            (Some(m), Some(p)) => format!("{m} {p}"),
-            (None, Some(p)) => p.clone(),
-            _ => "(unnamed device)".into(),
-        };
-        let mut state = d.in_use_by.as_deref().map(|u| format!("  in use by {u}")).unwrap_or_default();
-        if d.input {
-            state.push_str("  [input device: the server loses it while you use it]");
-        }
-        println!(
-            "   {:<8} {:04x}:{:04x}  {:?}  {}{}",
-            d.busid, d.vendor_id, d.product_id, d.speed, name, state
-        );
     }
 }

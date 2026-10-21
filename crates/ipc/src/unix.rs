@@ -59,7 +59,10 @@ impl Listener {
         let inner = UnixListener::bind(&path).with_context(|| format!("binding {}", path.display()))?;
         // Access is decided per connection from the peer's credentials, not from file modes.
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o666))?;
-        Ok(Listener { inner, service_uid: own_uid() })
+        Ok(Listener {
+            inner,
+            service_uid: own_uid(),
+        })
     }
 
     /// `Ok(None)` means a peer connected but is not allowed to use the service.
@@ -88,8 +91,12 @@ fn allowed(uid: u32, gid: u32, service_uid: u32) -> bool {
 }
 
 fn in_group(uid: u32, primary_gid: u32) -> bool {
-    let Ok(groups) = std::fs::read_to_string("/etc/group") else { return false };
-    let Some(line) = groups.lines().find(|l| l.split(':').next() == Some(GROUP)) else { return false };
+    let Ok(groups) = std::fs::read_to_string("/etc/group") else {
+        return false;
+    };
+    let Some(line) = groups.lines().find(|l| l.split(':').next() == Some(GROUP)) else {
+        return false;
+    };
     let f: Vec<&str> = line.split(':').collect();
     if f.get(2).and_then(|g| g.parse::<u32>().ok()) == Some(primary_gid) {
         return true;
@@ -113,9 +120,7 @@ fn has_session(uid: u32) -> bool {
         .unwrap_or(false)
 }
 
-pub(crate) async fn connect(
-    service: Service,
-) -> Result<(Box<dyn AsyncRead + Unpin + Send>, Box<dyn AsyncWrite + Unpin + Send>)> {
+pub(crate) async fn connect(service: Service) -> Result<(Box<dyn AsyncRead + Unpin + Send>, Box<dyn AsyncWrite + Unpin + Send>)> {
     let mut last = None;
     for path in candidates(service) {
         match UnixStream::connect(&path).await {
@@ -128,7 +133,11 @@ pub(crate) async fn connect(
     }
     match last {
         Some((path, e)) if e.kind() == std::io::ErrorKind::PermissionDenied => {
-            bail!("not allowed to use the netusb {} service ({}); add yourself to the `netusb` group", service.name(), path.display())
+            bail!(
+                "not allowed to use the netusb {} service ({}); add yourself to the `netusb` group",
+                service.name(),
+                path.display()
+            )
         }
         _ => bail!("the netusb {} service is not running", service.name()),
     }

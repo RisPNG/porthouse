@@ -14,7 +14,10 @@ const SDDL: &str = "D:(A;;GA;;;SY)(A;;GA;;;BA)(A;;GRGW;;;IU)";
 
 fn pipe_name(service: Service) -> String {
     let suffix = std::env::var("NETUSB_IPC_DIR").map(|d| format!("-{d}")).unwrap_or_default();
-    let suffix: String = suffix.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect();
+    let suffix: String = suffix
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' })
+        .collect();
     format!(r"\\.\pipe\netusb-{}{}", service.name(), suffix)
 }
 
@@ -28,7 +31,9 @@ fn create(name: &str, first: bool) -> Result<NamedPipeServer> {
     let mut descriptor: *mut c_void = std::ptr::null_mut();
     // SAFETY: `wide` is NUL terminated and outlives the call; `descriptor` receives a buffer that is
     // freed with LocalFree below.
-    let ok = unsafe { ConvertStringSecurityDescriptorToSecurityDescriptorW(wide.as_ptr(), SDDL_REVISION_1, &mut descriptor, std::ptr::null_mut()) };
+    let ok = unsafe {
+        ConvertStringSecurityDescriptorToSecurityDescriptorW(wide.as_ptr(), SDDL_REVISION_1, &mut descriptor, std::ptr::null_mut())
+    };
     if ok == 0 {
         bail!("building the pipe access list failed: {}", std::io::Error::last_os_error());
     }
@@ -64,9 +69,7 @@ impl Listener {
     }
 }
 
-pub(crate) async fn connect(
-    service: Service,
-) -> Result<(Box<dyn AsyncRead + Unpin + Send>, Box<dyn AsyncWrite + Unpin + Send>)> {
+pub(crate) async fn connect(service: Service) -> Result<(Box<dyn AsyncRead + Unpin + Send>, Box<dyn AsyncWrite + Unpin + Send>)> {
     let name = pipe_name(service);
     for _ in 0..20 {
         match ClientOptions::new().open(&name) {
