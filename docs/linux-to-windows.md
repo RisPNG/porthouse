@@ -61,7 +61,7 @@ powershell -ExecutionPolicy Bypass -File .\install-windows.ps1 -Role client
 
 ## 3. Move the mouse
 
-Find your mouse in the list. It is marked **mouse / keyboard**. Press **Use** and confirm the warning.
+Find your mouse in the list. It is marked **input device**. Press **Use** and confirm the warning.
 
 For a moment the Linux pointer freezes. Then the mouse controls the Windows PC. It is listed under
 **In use on this computer**.

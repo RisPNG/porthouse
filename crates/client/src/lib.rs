@@ -447,7 +447,7 @@ pub fn print_listing(l: &Listing) {
         };
         let mut state = d.in_use_by.as_deref().map(|u| format!("  in use by {u}")).unwrap_or_default();
         if d.input {
-            state.push_str("  [mouse/keyboard: the server loses it while you use it]");
+            state.push_str("  [input device: the server loses it while you use it]");
         }
         println!(
             "   {:<8} {:04x}:{:04x}  {:?}  {}{}",

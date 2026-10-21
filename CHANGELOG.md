@@ -7,7 +7,7 @@ First release.
 ### Added
 - **Server and client for Linux and Windows.** Share a USB device from one machine and use it from another as if it were plugged in locally. Bulk, interrupt and control devices work (mice, keyboards, serial adapters, storage, dongles, programmers).
 - **Encrypted and authenticated.** TLS 1.3 with certificates on both sides, pinned by fingerprint, and one-time PIN pairing bound to the TLS session so a man-in-the-middle cannot relay it. Unpaired machines can do nothing but pair.
-- **Web interface** for the client: finds servers on the local network, shows their devices, pairs, attaches and releases. Warns before taking a mouse or keyboard, because the sharing machine loses it.
+- **Web interface** for the client: finds servers on the local network, shows their devices, pairs, attaches and releases. Warns before taking an input device (mouse, keyboard, buttons), because the sharing machine loses it.
 - **Command line** (`netusb-client list|pair|use|servers|forget|gui|open`, `netusb-server run|pair|clients|revoke`).
 - **Linux:** static x86_64 archive with an installer that sets up systemd services (`sudo ./install.sh server|client|both`, `uninstall [--purge]`).
 - **Windows:** zip with PowerShell installer and uninstaller (scheduled tasks, firewall rules, protected state directory). The client attaches devices through the `usbip-win2` driver.

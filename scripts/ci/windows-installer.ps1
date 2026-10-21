@@ -58,6 +58,10 @@ if (Test-Path $urlFile) {
     Check 'the API refuses requests without the cookie' ($unauth -eq '401') "(got $unauth)"
 }
 
+Write-Host '== the Start Menu shortcut target: netusb-client open'
+$openOut = & $cli open 2>&1 | Out-String
+Check '"netusb-client open" finds the running interface and opens it' (($LASTEXITCODE -eq 0) -and ($openOut -match 'http://127\.0\.0\.1:\d+/\?token=')) $openOut
+
 Write-Host '== uninstall'
 & (Join-Path $stage 'uninstall-windows.ps1') -Purge
 Start-Sleep -Seconds 2

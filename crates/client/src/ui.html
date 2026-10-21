@@ -185,12 +185,12 @@ function renderServer(sv) {
           onclick: () => {
             // A mouse or keyboard disappears from the machine sharing it, which can strand someone
             // who has no other way to control that machine. Make that explicit before taking it.
-            if (d.input && !confirm(`"${devName(d)}" is a mouse or keyboard.\n\nWhile you use it here, ${sv.name} will not have it. Make sure ${sv.name} has another way to be controlled, and that you can release it from this page.\n\nUse it here?`)) return;
+            if (d.input && !confirm(`"${devName(d)}" has an input function (a mouse, keyboard or buttons).\n\nWhile you use it here, ${sv.name} will not have it. Make sure ${sv.name} has another way to be controlled, and that you can release it from this page.\n\nUse it here?`)) return;
             act(id, () => api("/api/use", { addr: sv.addr, busid: d.busid }), "Connected");
           } });
     card.append(el("div", { class: "row" },
       el("div", { class: "info" }, el("div", { class: "title", text: devName(d) }), el("div", { class: "sub", text: sub })),
-      d.input ? el("span", { class: "chip warn", title: "The sharing machine loses this device while you use it", text: "mouse / keyboard" }) : null, btn));
+      d.input ? el("span", { class: "chip warn", title: "A mouse, keyboard or other input device: the machine sharing it loses it while you use it", text: "input device" }) : null, btn));
   }
   return card;
 }

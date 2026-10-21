@@ -17,7 +17,7 @@ cd "$W"/netusb-*
 
 echo "== checksums and static linking"
 sha256sum -c SHA256SUMS > /dev/null && ok "checksums verify" || bad "checksums"
-if file netusb-server | grep -q "statically linked"; then ok "the server is a static binary"; else echo "  NOTE  $(file netusb-server | cut -c1-120)"; fi
+if file netusb-server | grep -qE "statically linked|static-pie linked"; then ok "the server is a static binary"; else bad "the server is not static: $(file netusb-server | cut -c1-120)"; fi
 
 echo "== install both services"
 ./install.sh both > "$W/install.out" 2>&1 && ok "installer succeeded" || { bad "installer failed"; cat "$W/install.out"; }
