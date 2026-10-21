@@ -1,10 +1,3 @@
-//! USB/IP URB wire format, as consumed by the Linux `vhci_hcd` virtual host controller and the
-//! Windows `usbip-win2` driver. All integers are big-endian. Every URB message is a fixed 48-byte
-//! header, optionally followed by payload.
-//!
-//! This is the public USB/IP specification (Linux `Documentation/usb/usbip_protocol.rst`), not
-//! the netusb control protocol.
-
 pub const HEADER_LEN: usize = 48;
 
 pub const CMD_SUBMIT: u32 = 0x0001;
@@ -19,16 +12,13 @@ pub const DIR_IN: u32 = 1;
 /// Linux `vhci_hcd` sends 0 instead, so both mean "no isochronous packets".
 pub const NON_ISO: u32 = 0xffff_ffff;
 
-/// True when a CMD_SUBMIT really carries isochronous packet descriptors.
 pub fn is_isochronous(number_of_packets: u32) -> bool {
     number_of_packets != 0 && number_of_packets != NON_ISO
 }
 pub const ISO_DESC_LEN: usize = 16;
 
-/// Largest data stage we accept in a single URB. Real devices stay far below this.
 pub const MAX_URB_DATA: usize = 4 * 1024 * 1024;
 
-// Negative errno values carried in `status` fields.
 pub const ECONNRESET: i32 = -104;
 pub const ENODEV: i32 = -19;
 pub const EPIPE: i32 = -32;
@@ -108,7 +98,6 @@ fn put(h: &mut [u8; HEADER_LEN], at: usize, v: u32) {
     h[at..at + 4].copy_from_slice(&v.to_be_bytes());
 }
 
-/// Build a RET_SUBMIT header. `devid`, `direction` and `ep` are zero in replies per the spec.
 pub fn ret_submit(seqnum: u32, status: i32, actual_len: u32, number_of_packets: u32) -> [u8; HEADER_LEN] {
     let mut h = [0u8; HEADER_LEN];
     put(&mut h, 0, RET_SUBMIT);
@@ -129,7 +118,6 @@ pub fn ret_unlink(seqnum: u32, status: i32) -> [u8; HEADER_LEN] {
     h
 }
 
-/// Build a CMD_SUBMIT header (used by tests and by a future in-process client).
 pub fn cmd_submit(seqnum: u32, devid: u32, direction: u32, ep: u32, buffer_len: u32, setup: [u8; 8]) -> [u8; HEADER_LEN] {
     let mut h = [0u8; HEADER_LEN];
     put(&mut h, 0, CMD_SUBMIT);

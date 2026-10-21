@@ -15,7 +15,6 @@ use rustls::{ClientConfig, DigitallySignedStruct, DistinguishedName, Error, Serv
 
 use crate::identity::{fingerprint, Identity};
 
-/// TLS exporter label used to bind the pairing proof to one TLS session.
 pub const EXPORTER_LABEL: &[u8] = b"EXPORTER-netusb-pairing";
 
 fn provider() -> Arc<CryptoProvider> {
@@ -111,19 +110,16 @@ pub fn client_config(id: &Identity) -> Result<Arc<ClientConfig>> {
     Ok(Arc::new(cfg))
 }
 
-/// Fingerprint of the peer's leaf certificate on a finished handshake.
 pub fn peer_fingerprint(state: &rustls::CommonState) -> Option<String> {
     state.peer_certificates()?.first().map(fingerprint)
 }
 
-/// Per-session secret both ends can compute, used to bind the pairing proof to this TLS session.
 pub fn session_binding<D>(conn: &rustls::ConnectionCommon<D>) -> Result<[u8; 32]> {
     let mut out = [0u8; 32];
     conn.export_keying_material(&mut out, EXPORTER_LABEL, None)?;
     Ok(out)
 }
 
-/// The name presented in SNI. It carries no meaning; trust comes from the pinned fingerprint.
 pub fn server_name() -> ServerName<'static> {
     ServerName::try_from("netusb").expect("static name is valid")
 }

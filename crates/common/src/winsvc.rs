@@ -1,5 +1,3 @@
-//! Running as a Windows service, and installing and removing the service.
-
 use std::ffi::OsString;
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
@@ -14,7 +12,6 @@ use windows_service::service_control_handler::{self, ServiceControlHandlerResult
 use windows_service::service_manager::{ServiceManager, ServiceManagerAccess};
 use windows_service::{define_windows_service, service_dispatcher};
 
-/// What a service does between start and stop. It returns when the stop signal arrives.
 pub type Entry = fn(oneshot::Receiver<()>) -> Result<()>;
 
 static ENTRY: OnceLock<(&'static str, Entry)> = OnceLock::new();
@@ -28,7 +25,6 @@ fn service_main(_arguments: Vec<OsString>) {
     }
 }
 
-/// Hand this process to the service control manager. Returns when the service has stopped.
 pub fn dispatch(name: &'static str, entry: Entry) -> Result<()> {
     ENTRY
         .set((name, entry))
@@ -72,7 +68,6 @@ fn run(name: &'static str, entry: Entry) -> Result<()> {
     result
 }
 
-/// Send everything the program prints to stderr into `path`, since a service has no console.
 pub fn log_to(path: &std::path::Path) -> Result<()> {
     use std::os::windows::io::AsRawHandle;
     let file = std::fs::OpenOptions::new().create(true).append(true).open(path)?;
@@ -90,7 +85,6 @@ extern "system" {
     fn set_std_handle(which: u32, handle: std::os::windows::io::RawHandle) -> i32;
 }
 
-/// Register the running program as an automatic service that starts at once and restarts on failure.
 pub fn install(name: &str, display: &str, description: &str, dependencies: &[&str]) -> Result<()> {
     let manager = ServiceManager::local_computer(None::<&str>, ServiceManagerAccess::CONNECT | ServiceManagerAccess::CREATE_SERVICE)
         .context("this needs Administrator rights")?;
@@ -136,7 +130,6 @@ pub fn install(name: &str, display: &str, description: &str, dependencies: &[&st
     Ok(())
 }
 
-/// Stop and delete the service. Missing is fine.
 pub fn uninstall(name: &str) -> Result<()> {
     let manager = ServiceManager::local_computer(None::<&str>, ServiceManagerAccess::CONNECT).context("this needs Administrator rights")?;
     let access = ServiceAccess::STOP | ServiceAccess::DELETE | ServiceAccess::QUERY_STATUS;

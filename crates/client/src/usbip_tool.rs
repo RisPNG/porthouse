@@ -1,20 +1,3 @@
-//! Attach through an external USB/IP importer (the `usbip-win2` driver's `usbip.exe`).
-//!
-//! On Windows there is no sysfs to hand a socket to. The `usbip-win2` driver instead makes its
-//! *own* TCP connection to a USB/IP server, performs the standard import handshake, and then
-//! speaks the URB protocol on that socket. We exploit that: this process plays the server on
-//! loopback, answers the handshake with the device the real remote server just attached, and then
-//! relays the raw URB stream to the remote over the encrypted connection. The driver never sees
-//! the network, only a local USB/IP "server".
-//!
-//! ```text
-//!  usbip.exe attach -r 127.0.0.1 --tcp-port P -b <secret>     (importer, drives the kernel driver)
-//!        │ kernel driver connects ───────────────►  shim (this module)  ════ TLS ════► netusb-server
-//! ```
-//!
-//! The handshake and device struct are the public USB/IP wire format
-//! (`tools/usb/usbip/src/usbip_network.h` in the Linux sources).
-
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -30,10 +13,8 @@ pub const OP_REQ_IMPORT: u16 = 0x8003;
 pub const OP_REP_IMPORT: u16 = 0x0003;
 const BUS_ID_SIZE: usize = 32;
 const DEV_PATH_MAX: usize = 256;
-/// `usbip_usb_device` on the wire.
 pub const USB_DEVICE_LEN: usize = DEV_PATH_MAX + BUS_ID_SIZE + 12 + 6 + 6;
 
-/// `op_status_t`
 const ST_OK: u32 = 0;
 const ST_NA: u32 = 1;
 
@@ -47,7 +28,6 @@ fn put_str(buf: &mut Vec<u8>, s: &str, len: usize) {
     buf.resize(buf.len() + (len - n), 0);
 }
 
-/// The 8-byte `op_common` header: version, code, status (big-endian).
 fn op_header(code: u16, status: u32) -> Vec<u8> {
     let mut h = Vec::with_capacity(8);
     h.extend_from_slice(&USBIP_VERSION.to_be_bytes());
@@ -83,12 +63,10 @@ pub fn import_reply(info: &AttachInfo, path: &str, busid: &str) -> Vec<u8> {
     b
 }
 
-/// A refusal: just the header with a non-zero status, which is all the protocol sends on error.
 pub fn import_refusal() -> Vec<u8> {
     op_header(OP_REP_IMPORT, ST_NA)
 }
 
-/// Outcome of reading one `OP_REQ_IMPORT`.
 #[derive(Debug, PartialEq, Eq)]
 enum Request {
     Import { busid: String },
@@ -138,15 +116,11 @@ async fn accept_import_with(listener: &TcpListener, token: &str, info: &AttachIn
             Ok(Ok(_)) => {
                 let _ = s.write_all(&import_refusal()).await;
             }
-            // Read error or silence: drop it and keep waiting for the real importer.
             Ok(Err(_)) | Err(_) => {}
         }
     }
 }
 
-/// Where the importer program lives.
-///
-/// Order: `NETUSB_USBIP_EXE`; on Windows `%ProgramFiles%\USBip\usbip.exe`; then `PATH`.
 pub fn find_tool() -> Result<PathBuf> {
     if let Some(p) = std::env::var_os("NETUSB_USBIP_EXE") {
         let p = PathBuf::from(p);
@@ -197,8 +171,6 @@ fn random_token() -> Result<String> {
     Ok(format!("nu{}", netusb_common::identity::hex(&b)))
 }
 
-/// Make the importer attach the device described by `info`. Returns the socket now carrying URBs
-/// (to be relayed to the remote) and the importer's port number, needed to detach later.
 pub async fn attach(exe: &Path, info: &AttachInfo) -> Result<(TcpStream, u32)> {
     let listener = TcpListener::bind(("127.0.0.1", 0)).await?;
     let port = listener.local_addr()?.port();
@@ -257,7 +229,6 @@ pub async fn attach(exe: &Path, info: &AttachInfo) -> Result<(TcpStream, u32)> {
     Ok((local, port))
 }
 
-/// Unplug the device the importer attached on `port`.
 pub async fn detach(exe: &Path, port: u32) -> Result<()> {
     let out = tokio::time::timeout(
         Duration::from_secs(15),
@@ -272,7 +243,6 @@ pub async fn detach(exe: &Path, port: u32) -> Result<()> {
     Ok(())
 }
 
-/// For diagnostics: where a loopback connection came from.
 #[allow(dead_code)]
 fn is_local(addr: &SocketAddr) -> bool {
     addr.ip().is_loopback()

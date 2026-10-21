@@ -30,7 +30,6 @@ fn socket_path(service: Service) -> PathBuf {
     run_dir().join(format!("{}.sock", service.name()))
 }
 
-/// Every place a service might have put its socket, best guess first.
 fn candidates(service: Service) -> Vec<PathBuf> {
     let file = format!("{}.sock", service.name());
     if let Some(d) = std::env::var_os("NETUSB_IPC_DIR") {
@@ -65,7 +64,6 @@ impl Listener {
         })
     }
 
-    /// `Ok(None)` means a peer connected but is not allowed to use the service.
     pub(crate) async fn accept(&mut self) -> Result<Option<UnixStream>> {
         let (stream, _) = self.inner.accept().await?;
         let cred = stream.peer_cred()?;
@@ -80,9 +78,6 @@ impl Listener {
     }
 }
 
-/// Root, the account running the service, members of group `netusb`, and anyone logged in at a
-/// local seat may use the service. The last rule is what lets the desktop user run the program
-/// without any set-up.
 fn allowed(uid: u32, gid: u32, service_uid: u32) -> bool {
     if uid == 0 || uid == service_uid {
         return true;
@@ -116,7 +111,6 @@ fn user_name(uid: u32) -> Option<String> {
     })
 }
 
-/// systemd-logind keeps a state file for every user with a login session.
 fn has_session(uid: u32) -> bool {
     std::fs::read_to_string(format!("/run/systemd/users/{uid}"))
         .map(|s| s.lines().any(|l| l == "STATE=active" || l == "STATE=online"))

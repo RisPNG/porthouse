@@ -1,15 +1,3 @@
-//! Software USB devices for testing the whole attach path on machines with no spare hardware.
-//!
-//! * `mouse`: a boot-protocol HID mouse that draws a small square with the pointer of whoever
-//!   attaches it. Exercises interrupt transfers and the operating system's HID stack.
-//! * `loopback`: a vendor-specific device with one bulk OUT and one bulk IN endpoint that echoes
-//!   what it receives, and Microsoft OS descriptors that make Windows bind its generic WinUSB
-//!   driver automatically. Exercises bulk transfers and the Windows server's WinUSB path.
-//!
-//! Enabled with `netusb-server run --test-device mouse` / `--test-device loopback` (repeatable).
-//! They are strictly opt-in because the mouse moves a pointer. They speak the same URB protocol as
-//! the real engine, so the client cannot tell the difference.
-
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -23,13 +11,10 @@ use tokio::sync::{mpsc, watch, Notify};
 use tokio::task::AbortHandle;
 
 pub const VENDOR_ID: u16 = 0x1209; // pid.codes
-/// Report interval of the mouse's interrupt endpoint, like a real full-speed mouse's bInterval.
 const REPORT_EVERY: Duration = Duration::from_millis(10);
 /// The vendor request code announced in the Microsoft OS string descriptor.
 const MS_VENDOR_CODE: u8 = 0x21;
-/// Bulk packet size of the (high-speed) loopback device.
 const BULK_PACKET: usize = 512;
-/// Interface GUID Windows registers for the loopback device (what `nusb` opens it by).
 const LOOPBACK_GUID: &str = "{3a9d2d1c-6a4e-4f50-9b0e-5c1b7d2e8f41}";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -83,8 +68,6 @@ impl Kind {
         }
     }
 
-    /// Link speed as a Linux `usb_device_speed` number. The loopback device is high speed, which is
-    /// also what the Windows virtual host controller presents, so its 512-byte bulk packets are real.
     fn speed(self) -> u32 {
         match self {
             Kind::Mouse => 2,    // full
@@ -125,7 +108,6 @@ impl Kind {
     }
 }
 
-/// Standard boot mouse report descriptor: 3 buttons, relative X, Y and wheel.
 const REPORT_DESCRIPTOR: [u8; 52] = [
     0x05, 0x01, 0x09, 0x02, 0xA1, 0x01, 0x09, 0x01, 0xA1, 0x00, 0x05, 0x09, 0x19, 0x01, 0x29, 0x03, 0x15, 0x00, 0x25, 0x01, 0x95, 0x03,
     0x75, 0x01, 0x81, 0x02, 0x95, 0x01, 0x75, 0x05, 0x81, 0x03, 0x05, 0x01, 0x09, 0x30, 0x09, 0x31, 0x09, 0x38, 0x15, 0x81, 0x25, 0x7F,
@@ -239,7 +221,6 @@ fn ms_ext_properties() -> Vec<u8> {
     d
 }
 
-/// The n-th movement report: the pointer walks the sides of a square, 50 reports per side.
 pub fn report(n: u64) -> [u8; 4] {
     let (dx, dy): (i8, i8) = match (n / 50) % 4 {
         0 => (3, 0),
@@ -250,7 +231,6 @@ pub fn report(n: u64) -> [u8; 4] {
     [0, dx as u8, dy as u8, 0]
 }
 
-/// Outcome of a control request.
 enum Control {
     Data(Vec<u8>),
     Stall,
@@ -286,10 +266,8 @@ fn control(kind: Kind, setup: [u8; 8]) -> Control {
                 _ => Control::Stall,
             },
             Kind::Loopback => match (bm, req, index) {
-                // Microsoft OS descriptors, asked for at device level or per interface.
                 (0xC0 | 0xC1, MS_VENDOR_CODE, 4) => Control::Data(ms_compat_id()),
                 (0xC0 | 0xC1, MS_VENDOR_CODE, 5) => Control::Data(ms_ext_properties()),
-                // A trivial vendor request so control transfers can be told apart from standard ones.
                 (0xC0, 0x30, _) => Control::Data(b"NUSB".to_vec()),
                 _ => Control::Stall,
             },
@@ -302,18 +280,14 @@ enum Reply {
     Unlink { seq: u32, status: i32 },
 }
 
-/// State shared by the endpoint handlers of one attachment.
 struct Shared {
     kind: Kind,
-    /// Mouse: how many reports have been handed out.
     counter: AtomicU64,
-    /// Loopback: bytes received on the OUT endpoint, waiting to be read from the IN endpoint.
     echo: Mutex<VecDeque<u8>>,
     echo_ready: Notify,
     pending: Mutex<HashMap<u32, AbortHandle>>,
 }
 
-/// Serve one attachment of a virtual device until the client leaves or `shutdown` fires.
 pub async fn run<S>(kind: Kind, stream: S, mut shutdown: watch::Receiver<bool>) -> Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -441,7 +415,6 @@ async fn read_loop<R: AsyncRead + Unpin>(rd: &mut R, out: &mpsc::Sender<Reply>, 
                     continue;
                 }
                 match (shared.kind, basic.ep, dir_in) {
-                    // Mouse: interrupt IN answers with the next movement report after one interval.
                     (Kind::Mouse, 1, true) => {
                         let (out2, sh) = (out.clone(), shared.clone());
                         let task = tokio::spawn(async move {
@@ -455,7 +428,6 @@ async fn read_loop<R: AsyncRead + Unpin>(rd: &mut R, out: &mpsc::Sender<Reply>, 
                         });
                         shared.pending.lock().unwrap().insert(seq, task.abort_handle());
                     }
-                    // Loopback: bulk OUT stores the data, answering with how much was taken.
                     (Kind::Loopback, 1, false) => {
                         shared.echo.lock().unwrap().extend(out_data);
                         shared.echo_ready.notify_waiters();
@@ -468,7 +440,6 @@ async fn read_loop<R: AsyncRead + Unpin>(rd: &mut R, out: &mpsc::Sender<Reply>, 
                             })
                             .await;
                     }
-                    // Loopback: bulk IN waits for data, then returns up to the requested length.
                     (Kind::Loopback, 1, true) => {
                         let (out2, sh) = (out.clone(), shared.clone());
                         let task = tokio::spawn(async move {

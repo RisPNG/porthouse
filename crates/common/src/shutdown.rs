@@ -1,5 +1,3 @@
-//! The signal that ends a service run from a terminal: Ctrl-C everywhere, SIGTERM on Unix.
-
 pub async fn console_signal() {
     #[cfg(unix)]
     {

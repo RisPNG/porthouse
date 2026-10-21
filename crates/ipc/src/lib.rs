@@ -1,9 +1,3 @@
-//! Local control channel between a netusb service and its programs.
-//!
-//! One JSON object per line. A request is `{"id":1,"method":"state","params":{}}` and the reply is
-//! `{"id":1,"result":...}` or `{"id":1,"error":"..."}`. The transport is a Unix socket on Unix and
-//! a named pipe on Windows, so Qt's `QLocalSocket` speaks it on both.
-
 use std::future::Future;
 use std::sync::Arc;
 
@@ -24,7 +18,6 @@ use windows as transport;
 
 const MAX_LINE: usize = 1 << 20;
 
-/// The two services a program can talk to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Service {
     Server,
@@ -57,14 +50,12 @@ pub struct Reply {
     pub error: Option<String>,
 }
 
-/// Decode `params` into the type a method expects.
 pub fn params<T: serde::de::DeserializeOwned>(req: &Request) -> Result<T, String> {
     serde_json::from_value(req.params.clone()).map_err(|e| format!("bad parameters for {}: {e}", req.method))
 }
 
 type Handler<F> = Arc<F>;
 
-/// Answer requests on the service's endpoint until the process ends.
 pub async fn serve<F, Fut>(service: Service, handler: F) -> Result<()>
 where
     F: Fn(Request) -> Fut + Send + Sync + 'static,
@@ -137,7 +128,6 @@ where
     }
 }
 
-/// A connection to a running service.
 pub struct Client {
     reader: BufReader<Box<dyn AsyncRead + Unpin + Send>>,
     writer: Box<dyn AsyncWrite + Unpin + Send>,

@@ -1,17 +1,3 @@
-//! Per-attachment USB engine.
-//!
-//! Once a client attaches, the connection carries raw USB/IP URB traffic. This module reads
-//! `CMD_SUBMIT` / `CMD_UNLINK` from the stream and executes them against a real device through
-//! `nusb`, writing `RET_SUBMIT` / `RET_UNLINK` back.
-//!
-//! Layout:
-//! * a reader loop parses URBs and dispatches them;
-//! * one worker task per bulk/interrupt endpoint owns that `nusb::Endpoint` and keeps a FIFO of
-//!   in-flight transfers (the kernel completes them in submission order);
-//! * control transfers run as short-lived tasks, with the few standard requests that the host OS
-//!   owns (set configuration / interface, clear halt, set address) intercepted;
-//! * a single writer task serialises replies.
-
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 use std::task::Poll;
@@ -31,10 +17,7 @@ use tokio::sync::{mpsc, oneshot, watch};
 const CONTROL_TIMEOUT: Duration = Duration::from_secs(5);
 
 enum Reply {
-    /// `actual` is the transferred length; `data` is the payload, present only for IN transfers.
     Submit { seq: u32, status: i32, actual: u32, data: Vec<u8> },
-    /// `seq` is the CMD_UNLINK's own sequence number (what the reply must echo); `target` is the
-    /// URB that was unlinked, so its in-flight entry can be dropped.
     Unlink { seq: u32, status: i32, target: Option<u32> },
 }
 
@@ -49,7 +32,6 @@ struct EpHandle {
     interface: u8,
 }
 
-/// seq -> endpoint address, for bulk/interrupt URBs that have not been answered yet.
 type Inflight = Arc<Mutex<HashMap<u32, u8>>>;
 type EpTable = Arc<Mutex<HashMap<u8, EpHandle>>>;
 
@@ -72,7 +54,6 @@ struct Pending {
     seq: u32,
     req_len: usize,
     data: Vec<u8>,
-    /// Sequence number of the CMD_UNLINK that asked to cancel this transfer.
     unlink_seq: Option<u32>,
 }
 
@@ -128,7 +109,6 @@ async fn worker<T: BulkOrInterrupt, D: EndpointDirection>(mut ep: Endpoint<T, D>
                     p.unlink_seq = Some(unlink_seq);
                     ep.cancel_all();
                 } else {
-                    // Already answered: nothing left to cancel.
                     let _ = out
                         .send(Reply::Unlink {
                             seq: unlink_seq,
@@ -145,7 +125,6 @@ async fn worker<T: BulkOrInterrupt, D: EndpointDirection>(mut ep: Endpoint<T, D>
             Ev::Done(c) => {
                 let Some(p) = queue.pop_front() else { continue };
                 if let (Some(unlink_seq), Err(TransferError::Cancelled)) = (p.unlink_seq, &c.status) {
-                    // Cancelled on request before it finished: answer the unlink only.
                     let _ = out
                         .send(Reply::Unlink {
                             seq: unlink_seq,
@@ -252,7 +231,6 @@ struct Session {
 }
 
 impl Session {
-    /// (Re)create workers for every endpoint of `interface` in its current alternate setting.
     fn open_endpoints(&self, interface: &Interface) -> Result<()> {
         let Some(desc) = interface.descriptor() else { return Ok(()) };
         let number = interface.interface_number();
@@ -266,7 +244,6 @@ impl Session {
                 (TransferType::Bulk, false) => tokio::spawn(worker(interface.endpoint::<Bulk, Out>(addr)?, rx, out)),
                 (TransferType::Interrupt, true) => tokio::spawn(worker(interface.endpoint::<Interrupt, In>(addr)?, rx, out)),
                 (TransferType::Interrupt, false) => tokio::spawn(worker(interface.endpoint::<Interrupt, Out>(addr)?, rx, out)),
-                // Isochronous (audio/video) is not carried yet; URBs to it are refused.
                 _ => continue,
             };
             self.eps.lock().unwrap().insert(addr, EpHandle { tx, interface: number });
@@ -289,7 +266,6 @@ impl Session {
         self.interfaces.iter().find(|i| i.interface_number() == number)
     }
 
-    /// Execute one control transfer; `Err` carries a negative errno for the URB status.
     async fn control(&self, setup: [u8; 8], dir_in: bool, data: Vec<u8>) -> Result<Vec<u8>, i32> {
         let (bm, req) = (setup[0], setup[1]);
         let value = u16::from_le_bytes([setup[2], setup[3]]);
@@ -301,7 +277,6 @@ impl Session {
         match (bm, req) {
             (0x00, 0x05) => return Ok(Vec::new()), // SET_ADDRESS: the virtual bus already did this
             (0x00, 0x09) => {
-                // SET_CONFIGURATION
                 let active = self.device.active_configuration().map(|c| c.configuration_value()).ok();
                 return if active == Some(value as u8) {
                     Ok(Vec::new())
@@ -310,7 +285,6 @@ impl Session {
                 };
             }
             (0x01, 0x0b) => {
-                // SET_INTERFACE
                 let number = (index & 0xff) as u8;
                 let Some(iface) = self.interface(number) else {
                     return Err(usbip::EINVAL);
@@ -323,7 +297,6 @@ impl Session {
                 return Ok(Vec::new());
             }
             (0x02, 0x01) if value == 0 => {
-                // CLEAR_FEATURE(ENDPOINT_HALT)
                 let addr = (index & 0xff) as u8;
                 let tx = self.eps.lock().unwrap().get(&addr).map(|h| h.tx.clone());
                 let Some(tx) = tx else { return Err(usbip::EPIPE) };
@@ -384,7 +357,6 @@ impl Session {
 /// Journal of devices whose kernel drivers this process detached. If the process dies without
 /// cleaning up, the next start restores them so a hard kill cannot leave an input device dead.
 fn journal_path() -> std::path::PathBuf {
-    // The state directory persists across restarts (and, for a service, across its private /tmp).
     netusb_common::paths::state_dir()
         .unwrap_or_else(|_| std::env::temp_dir())
         .join("claimed-devices")
@@ -414,7 +386,6 @@ fn journal_remove(busid: &str) {
     }
 }
 
-/// Give back any device a previous crashed instance left detached. `busid_of` maps nusb info to ids.
 pub async fn restore_stale(busid_of: impl Fn(&nusb::DeviceInfo) -> String) {
     let Ok(text) = std::fs::read_to_string(journal_path()) else {
         return;
@@ -439,7 +410,6 @@ pub async fn restore_stale(busid_of: impl Fn(&nusb::DeviceInfo) -> String) {
     let _ = std::fs::remove_file(journal_path());
 }
 
-/// Why a device could not be opened, with what to do about it on this operating system.
 fn open_failure(e: &impl std::fmt::Display) -> anyhow::Error {
     if cfg!(windows) {
         anyhow!(
@@ -451,9 +421,6 @@ fn open_failure(e: &impl std::fmt::Display) -> anyhow::Error {
     }
 }
 
-/// A device that is open, claimed from the host and ready to serve. Created before the client is
-/// told the attach succeeded, so that a device that cannot be taken is refused with a clear error
-/// instead of being reported as attached and then silently dropped.
 pub struct Prepared {
     device: Device,
     numbers: Vec<u8>,
@@ -464,8 +431,6 @@ pub struct Prepared {
     inflight: Inflight,
 }
 
-/// Open the device, take its interfaces away from the host driver and start its endpoint workers.
-/// On failure everything done so far is undone and the host driver is given back.
 pub async fn prepare(info: nusb::DeviceInfo, busid: String) -> Result<Prepared> {
     let device = info.open().await.map_err(|e| open_failure(&e))?;
     let numbers: Vec<u8> = {
@@ -497,7 +462,6 @@ pub async fn prepare(info: nusb::DeviceInfo, busid: String) -> Result<Prepared> 
     }
 }
 
-/// What to do when an interface cannot be claimed.
 fn claim_hint(windows: bool) -> &'static str {
     if windows {
         ". On Windows every interface you share must use the WinUSB driver: bind it with a tool such as Zadig \
@@ -535,8 +499,6 @@ async fn claim_all(device: &Device, numbers: &[u8]) -> Result<Claimed> {
     Ok((session, out_tx, out_rx, inflight))
 }
 
-/// Serve one prepared attachment until the client goes away or `shutdown` fires. Gives the device
-/// back to the host on exit.
 pub async fn serve<S>(prepared: Prepared, stream: S, mut shutdown: watch::Receiver<bool>) -> Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -586,14 +548,12 @@ where
         _ = shutdown.changed() => Ok(()),
     };
 
-    // Teardown: stop workers (they cancel and drain), release the interfaces, hand the device back.
     let handles: Vec<EpHandle> = session.eps.lock().unwrap().drain().map(|(_, h)| h).collect();
     drop(handles);
     let tasks: Vec<_> = session.worker_tasks.lock().unwrap().drain(..).collect();
     for t in tasks {
         let _ = t.await;
     }
-    // Dropping our senders lets the writer drain and finish (control tasks hold clones briefly).
     drop(out_tx);
     drop(session);
     let _ = writer.await;

@@ -1,11 +1,8 @@
-//! Socket settings shared by the server and the client.
-
 use std::io;
 use std::time::Duration;
 
 use socket2::{SockRef, TcpKeepalive};
 
-/// How long a connection may stay silent before probing, and how often to probe after that.
 pub const KEEPALIVE_IDLE: Duration = Duration::from_secs(10);
 pub const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(5);
 

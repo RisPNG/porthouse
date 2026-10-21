@@ -17,9 +17,7 @@ pub const PROTO_VERSION: u16 = 4;
 pub const DEFAULT_PORT: u16 = 7600;
 pub const MDNS_SERVICE: &str = "_netusb._tcp.local.";
 
-/// Hard cap on a single frame body, compressed or not. Guards against hostile length prefixes.
 pub const MAX_FRAME: usize = 16 * 1024 * 1024;
-/// Bodies at least this long are tried for compression.
 pub const COMPRESS_THRESHOLD: usize = 512;
 
 const FLAG_LZ4: u8 = 0x01;
@@ -39,7 +37,6 @@ pub enum ProtoError {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DeviceInfo {
-    /// Stable per-server identifier of the physical port, e.g. "1-2.3".
     pub busid: String,
     pub vendor_id: u16,
     pub product_id: u16,
@@ -48,7 +45,6 @@ pub struct DeviceInfo {
     pub manufacturer: Option<String>,
     pub product: Option<String>,
     pub serial: Option<String>,
-    /// Name of the client currently using the device, if any.
     pub in_use_by: Option<String>,
     /// A mouse, keyboard or other human-interface device. The machine sharing it loses it while
     /// it is attached elsewhere, so clients should warn before taking one.
@@ -67,22 +63,11 @@ pub enum Speed {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ClientMsg {
-    Hello {
-        proto: u16,
-        client_name: String,
-    },
+    Hello { proto: u16, client_name: String },
     ListDevices,
     Ping(u64),
-    /// Claim `busid` for this connection. On success the server replies `Attached` and the
-    /// connection then carries raw USB/IP URB traffic instead of netusb frames.
-    Attach {
-        busid: String,
-    },
-    /// Prove knowledge of the pairing PIN, bound to this TLS session. Only valid before the
-    /// client is authorized.
-    Pair {
-        proof: Vec<u8>,
-    },
+    Attach { busid: String },
+    Pair { proof: Vec<u8> },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -97,7 +82,6 @@ pub enum ServerMsg {
     Devices(Vec<DeviceInfo>),
     Pong(u64),
     Attached(AttachInfo),
-    /// Pairing succeeded; `proof` shows the server also knows the PIN.
     Paired {
         proof: Vec<u8>,
     },
@@ -107,7 +91,6 @@ pub enum ServerMsg {
     },
 }
 
-/// What the client needs to create the virtual device (the USB/IP "import" reply).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AttachInfo {
     pub busid: String,
@@ -121,20 +104,17 @@ pub struct AttachInfo {
     pub class: u8,
     pub subclass: u8,
     pub protocol: u8,
-    /// Best-effort values for importers that report them (Linux `vhci_hcd` ignores them).
     pub configuration_value: u8,
     pub num_configurations: u8,
     pub num_interfaces: u8,
 }
 
 impl AttachInfo {
-    /// The 32-bit device id used in every URB header.
     pub fn devid(&self) -> u32 {
         (self.busnum << 16) | self.devnum
     }
 }
 
-/// Encode one message as a complete frame.
 pub fn encode_frame<T: Serialize>(msg: &T) -> Result<Vec<u8>, ProtoError> {
     let raw = postcard::to_stdvec(msg)?;
     let (flags, body) = if raw.len() >= COMPRESS_THRESHOLD {
@@ -157,10 +137,6 @@ pub fn encode_frame<T: Serialize>(msg: &T) -> Result<Vec<u8>, ProtoError> {
     Ok(out)
 }
 
-/// Try to decode one frame from the front of `buf`.
-///
-/// Returns `Ok(None)` when more bytes are needed, otherwise the message and the number of bytes
-/// consumed.
 pub fn decode_frame<T: DeserializeOwned>(buf: &[u8]) -> Result<Option<(T, usize)>, ProtoError> {
     if buf.len() < HEADER_LEN {
         return Ok(None);

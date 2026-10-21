@@ -1,5 +1,3 @@
-//! The client service: finds servers, keeps attachments alive, and answers the control channel.
-
 use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::future::Future;
 use std::sync::{Arc, Mutex};
@@ -77,14 +75,14 @@ impl Shared {
 
     fn save_manual(&self) {
         let list: Vec<String> = self.manual.lock().unwrap().iter().cloned().collect();
-        if let Ok(dir) = paths::service_state_dir() {
+        if let Ok(dir) = paths::state_dir() {
             let _ = netusb_common::identity::write_private(&dir.join(SERVERS_FILE), list.join("\n").as_bytes());
         }
     }
 }
 
 fn load_manual() -> BTreeSet<String> {
-    paths::service_state_dir()
+    paths::state_dir()
         .ok()
         .and_then(|d| std::fs::read_to_string(d.join(SERVERS_FILE)).ok())
         .map(|s| s.lines().map(str::trim).filter(|l| !l.is_empty()).map(str::to_string).collect())
@@ -267,8 +265,6 @@ async fn use_device(app: App, r: UseParams) -> Result<Value, String> {
     Ok(json!({}))
 }
 
-// ---- background work -------------------------------------------------------------------------
-
 async fn probe(ctx: &Ctx, addr: &str) -> ServerView {
     let mut view = ServerView {
         addr: addr.to_string(),
@@ -370,7 +366,6 @@ fn spawn_mdns(app: App) {
     });
 }
 
-/// Run the service until `shutdown` completes, then give every attached device back.
 pub async fn run(ctx: Ctx, importer: Option<std::path::PathBuf>, shutdown: impl Future<Output = ()>) -> Result<()> {
     let app: App = Arc::new(Shared {
         ctx,

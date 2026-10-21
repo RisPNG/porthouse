@@ -32,7 +32,7 @@ async fn run(importer: Option<std::path::PathBuf>, shutdown: impl std::future::F
 
 #[cfg(windows)]
 fn windows_service_main() -> Result<()> {
-    if let Ok(dir) = netusb_common::paths::service_state_dir() {
+    if let Ok(dir) = netusb_common::paths::state_dir() {
         let _ = netusb_common::winsvc::log_to(&dir.join("client.log"));
     }
     netusb_common::winsvc::dispatch(SERVICE_NAME, |stop| {

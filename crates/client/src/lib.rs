@@ -16,7 +16,6 @@ use tokio::net::TcpStream;
 use tokio_rustls::client::TlsStream;
 use tokio_rustls::TlsConnector;
 
-/// Everything a command needs: our identity and the servers we have chosen to trust.
 pub struct Ctx {
     pub id: Identity,
     pub connector: TlsConnector,
@@ -25,7 +24,7 @@ pub struct Ctx {
 
 impl Ctx {
     pub fn load() -> Result<Ctx> {
-        let dir = paths::service_state_dir().context("preparing the state directory")?;
+        let dir = paths::state_dir().context("preparing the state directory")?;
         let id = identity::load_or_create(&dir, "client")?;
         let connector = TlsConnector::from(client_config(&id)?);
         Ok(Ctx {
@@ -50,8 +49,6 @@ pub struct ServerHello {
 }
 
 impl Conn {
-    /// Open an encrypted connection. With `require_known`, refuse any server whose certificate
-    /// fingerprint has not been pinned by a previous pairing.
     pub async fn open(ctx: &Ctx, addr: &str, require_known: bool) -> Result<Conn> {
         let tcp = tokio::time::timeout(Duration::from_secs(5), TcpStream::connect(addr))
             .await
@@ -123,7 +120,6 @@ impl Conn {
     }
 }
 
-/// The name this machine shows to servers.
 pub fn whoami() -> String {
     std::fs::read_to_string("/proc/sys/kernel/hostname")
         .ok()
@@ -141,8 +137,6 @@ pub fn with_default_port(h: String) -> String {
     }
 }
 
-/// Establish trust with a server: prove we know the PIN it shows, and check it proves the same.
-/// Returns the server's name.
 pub async fn pair(ctx: &Ctx, addr: &str, pin_text: &str) -> Result<String> {
     let mut c = Conn::open(ctx, addr, false).await?;
     let hello = c.hello().await?;
@@ -166,30 +160,26 @@ pub async fn pair(ctx: &Ctx, addr: &str, pin_text: &str) -> Result<String> {
     }
 }
 
-/// How to unplug the virtual device again.
 enum Detach {
-    /// Linux `vhci_hcd` port.
     #[cfg(target_os = "linux")]
     Vhci(u32),
-    /// An external USB/IP importer (`usbip.exe`) that owns the port.
-    Tool { exe: std::path::PathBuf, port: u32 },
+    Tool {
+        exe: std::path::PathBuf,
+        port: u32,
+    },
 }
 
-/// A device that is attached to this machine's virtual USB bus and waiting to be relayed.
 pub struct Established {
     pub info: AttachInfo,
     pub server_name: String,
     pub addr: String,
     pub busid: String,
-    /// Virtual port number on the local controller.
     pub port: u32,
     remote: TlsStream<TcpStream>,
     local: TcpStream,
     detach: Detach,
 }
 
-/// The shared first half of attaching: authenticate, claim the device on the server, and return
-/// what the server told us together with the (now raw) encrypted connection.
 async fn negotiate(ctx: &Ctx, addr: &str, busid: &str) -> Result<(ServerHello, AttachInfo, TlsStream<TcpStream>)> {
     let mut c = Conn::open(ctx, addr, true).await?;
     let hello = c.hello().await?;
@@ -207,7 +197,6 @@ async fn negotiate(ctx: &Ctx, addr: &str, busid: &str) -> Result<(ServerHello, A
     Ok((hello, info, c.sock))
 }
 
-/// Claim `busid` on the server and plug it into the local virtual USB bus.
 #[cfg(target_os = "linux")]
 pub async fn establish(ctx: &Ctx, addr: &str, busid: &str) -> Result<Established> {
     let (hello, info, remote) = negotiate(ctx, addr, busid).await?;
@@ -244,7 +233,6 @@ pub async fn establish(ctx: &Ctx, addr: &str, busid: &str) -> Result<Established
     })
 }
 
-/// Windows (and anything else without `vhci_hcd`): attach through the `usbip-win2` importer.
 #[cfg(not(target_os = "linux"))]
 pub async fn establish(ctx: &Ctx, addr: &str, busid: &str) -> Result<Established> {
     // Look for the importer before claiming anything on the server.
@@ -252,8 +240,6 @@ pub async fn establish(ctx: &Ctx, addr: &str, busid: &str) -> Result<Established
     establish_with_tool(ctx, addr, busid, exe).await
 }
 
-/// Attach using a specific USB/IP importer program (see [`usbip_tool`]). Public so it can be
-/// exercised on any platform with a stand-in importer.
 pub async fn establish_with_tool(ctx: &Ctx, addr: &str, busid: &str, exe: std::path::PathBuf) -> Result<Established> {
     let (hello, info, remote) = negotiate(ctx, addr, busid).await?;
     // From here the server holds the device for us. If the importer fails, dropping `remote`
@@ -272,8 +258,6 @@ pub async fn establish_with_tool(ctx: &Ctx, addr: &str, busid: &str, exe: std::p
 }
 
 impl Established {
-    /// Carry USB traffic until the server closes, an error occurs, or `stop` completes. Always
-    /// unplugs the virtual device before returning. The returned string says why it ended.
     pub async fn relay(mut self, stop: impl std::future::Future<Output = ()>) -> String {
         let reason = tokio::select! {
             r = tokio::io::copy_bidirectional(&mut self.remote, &mut self.local) => match r {

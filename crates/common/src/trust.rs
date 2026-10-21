@@ -1,5 +1,3 @@
-//! Pairing PIN, pairing proofs and the on-disk trust stores.
-
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -41,7 +39,6 @@ pub fn verify(pin: &str, binding: &[u8; 32], role: Role, fingerprint: &str, give
     expected.ct_eq(given).into()
 }
 
-/// 8 digits formatted "1234-5678". Uniform over 10^8 values via rejection sampling.
 pub fn generate_pin() -> Result<String> {
     loop {
         let mut b = [0u8; 4];
@@ -54,13 +51,11 @@ pub fn generate_pin() -> Result<String> {
     }
 }
 
-/// Normalise what a user typed ("12345678", "1234 5678", "1234-5678") to the canonical form.
 pub fn normalize_pin(s: &str) -> Option<String> {
     let d: String = s.chars().filter(|c| c.is_ascii_digit()).collect();
     (d.len() == 8).then(|| format!("{}-{}", &d[..4], &d[4..]))
 }
 
-/// A pairing window: a PIN that expires and that dies after too many wrong guesses.
 pub struct PinFile(PathBuf);
 
 impl PinFile {
@@ -75,12 +70,10 @@ impl PinFile {
         Ok((pin, expires))
     }
 
-    /// The active PIN, if the window is open and not expired.
     pub fn active(&self) -> Option<String> {
         self.window().map(|(pin, _)| pin)
     }
 
-    /// The active PIN and the time (seconds since the epoch) at which it expires.
     pub fn window(&self) -> Option<(String, u64)> {
         let (pin, expires, fails) = self.read()?;
         if now() >= expires || fails >= MAX_PIN_FAILURES {
@@ -100,7 +93,6 @@ impl PinFile {
         }
     }
 
-    /// A PIN is single-use.
     pub fn consume(&self) {
         let _ = std::fs::remove_file(&self.0);
     }
@@ -112,7 +104,6 @@ impl PinFile {
     }
 }
 
-/// "fingerprint<TAB>name" lines. Used for both authorized clients and known servers.
 pub struct TrustStore(PathBuf);
 
 impl TrustStore {
@@ -138,7 +129,6 @@ impl TrustStore {
 
     pub fn add(&self, fingerprint: &str, name: &str) -> Result<()> {
         let mut all: Vec<(String, String)> = self.entries().into_iter().filter(|(f, _)| f != fingerprint).collect();
-        // Names are display-only; keep them to one clean line.
         let name: String = name.chars().filter(|c| !c.is_control()).collect();
         all.push((fingerprint.to_string(), name));
         let text: String = all.iter().map(|(f, n)| format!("{f}\t{n}\n")).collect();

@@ -30,7 +30,6 @@ fn create(name: &str, first: bool) -> Result<NamedPipeServer> {
     let wide: Vec<u16> = SDDL.encode_utf16().chain(std::iter::once(0)).collect();
     let mut descriptor: *mut c_void = std::ptr::null_mut();
     // SAFETY: `wide` is NUL terminated and outlives the call; `descriptor` receives a buffer that is
-    // freed with LocalFree below.
     let ok = unsafe {
         ConvertStringSecurityDescriptorToSecurityDescriptorW(wide.as_ptr(), SDDL_REVISION_1, &mut descriptor, std::ptr::null_mut())
     };

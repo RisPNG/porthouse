@@ -1,12 +1,9 @@
-//! Linux `vhci_hcd` (USB/IP virtual host controller) sysfs interface.
-
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 
 const BASE: &str = "/sys/devices/platform/vhci_hcd.0";
 
-/// State value the kernel reports for a port with nothing attached (`VDEV_ST_NULL`).
 const ST_NULL: &str = "004";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -59,7 +56,6 @@ pub fn ports() -> Result<Vec<PortRow>> {
     Ok(rows)
 }
 
-/// Pick a free port on the hub matching the device speed (5+ = SuperSpeed hub, else high-speed hub).
 pub fn find_free_port(speed: u32) -> Result<u32> {
     pick_free(&ports()?, speed)
 }
@@ -72,7 +68,6 @@ fn pick_free(rows: &[PortRow], speed: u32) -> Result<u32> {
         .with_context(|| "no free vhci_hcd port for this device speed")
 }
 
-/// Hand `sockfd` to the kernel as the transport for a virtual device on `port`.
 pub fn attach(port: u32, sockfd: i32, devid: u32, speed: u32) -> Result<()> {
     let line = format!("{port} {sockfd} {devid} {speed}");
     std::fs::write(Path::new(BASE).join("attach"), &line).with_context(|| format!("writing {line:?} to vhci_hcd attach (needs root)"))

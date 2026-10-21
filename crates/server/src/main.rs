@@ -18,8 +18,6 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_rustls::TlsAcceptor;
 
-/// Marks a device as in use and unmarks it on drop, so a failed or panicking session cannot leave
-/// the device stuck.
 struct InUse<'a> {
     srv: &'a Server,
     busid: String,
@@ -39,8 +37,6 @@ impl Drop for Active<'_> {
     }
 }
 
-/// Set NETUSB_TRACE=1 to log every URB (engine and virtual devices). Off by default: it is noisy
-/// and exposes device traffic.
 pub(crate) fn trace_on() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("NETUSB_TRACE").is_some())
@@ -49,16 +45,13 @@ pub(crate) fn trace_on() -> bool {
 struct Server {
     id: String,
     name: String,
-    /// busid -> name of the client that currently has the device attached.
     in_use: Mutex<HashMap<String, String>>,
     shutdown: tokio::sync::watch::Receiver<bool>,
-    /// Sessions currently holding a device; shutdown waits for this to reach zero.
     active: AtomicUsize,
     acceptor: TlsAcceptor,
     fingerprint: String,
     authorized: TrustStore,
     pin: PinFile,
-    /// Offer the built-in virtual mouse (testing only).
     test_devices: Vec<emulated::Kind>,
 }
 
@@ -71,7 +64,6 @@ fn hostname() -> String {
         .unwrap_or_else(|| "netusb-host".into())
 }
 
-/// Stable identity that survives restarts. Linux machine-id, falling back to the hostname.
 fn server_id() -> String {
     std::fs::read_to_string("/etc/machine-id")
         .ok()
@@ -91,7 +83,6 @@ fn map_speed(s: Option<nusb::Speed>) -> Speed {
     }
 }
 
-/// Linux-style bus id ("5-1", "3-2.4"); other platforms fall back to nusb's own bus id.
 fn busid_of(d: &nusb::DeviceInfo) -> String {
     let chain = d.port_chain().iter().map(|p| p.to_string()).collect::<Vec<_>>().join(".");
     #[cfg(target_os = "linux")]
@@ -101,7 +92,6 @@ fn busid_of(d: &nusb::DeviceInfo) -> String {
     format!("{bus}-{chain}")
 }
 
-/// Every shareable device. Root hubs (class 9) are infrastructure, not something a user shares.
 fn raw_devices() -> Result<Vec<nusb::DeviceInfo>> {
     let mut v: Vec<_> = nusb::list_devices()
         .wait()
@@ -339,7 +329,6 @@ where
                     };
                     send(&mut sock, &ServerMsg::Attached(info)).await?;
                     eprintln!("{client_name:?} attached {busid}");
-                    // From here the (encrypted) connection carries raw USB/IP URBs until the client leaves.
                     let result = match (prepared, virtual_kind) {
                         (Some(p), _) => engine::serve(p, sock, srv.shutdown.clone()).await,
                         (None, Some(kind)) => emulated::run(kind, sock, srv.shutdown.clone()).await,
@@ -382,7 +371,6 @@ pair, clients and revoke talk to the running service."
     );
 }
 
-/// Ask the running service to do something and print its answer.
 async fn control(method: &str, params: serde_json::Value) -> Result<serde_json::Value> {
     let mut c = netusb_ipc::Client::connect(netusb_ipc::Service::Server).await?;
     c.call(method, params).await
@@ -427,7 +415,6 @@ async fn handle(h: Arc<Handler>, req: netusb_ipc::Request) -> Result<serde_json:
         }
         "revoke" => {
             let fp = req.params["fingerprint"].as_str().ok_or("fingerprint is required")?;
-            // An unambiguous prefix is enough, so nobody has to paste all 64 characters.
             let matches: Vec<_> = srv.authorized.entries().into_iter().filter(|(f, _)| f.starts_with(fp)).collect();
             match matches.as_slice() {
                 [(f, n)] => {
@@ -515,7 +502,7 @@ const SERVICE_NAME: &str = "netusb-server";
 
 #[cfg(windows)]
 fn windows_service_main() -> Result<()> {
-    if let Ok(dir) = paths::service_state_dir() {
+    if let Ok(dir) = paths::state_dir() {
         let _ = netusb_common::winsvc::log_to(&dir.join("server.log"));
     }
     netusb_common::winsvc::dispatch(SERVICE_NAME, |stop| {
@@ -570,7 +557,7 @@ async fn serve_until(opts: Options, shutdown: impl std::future::Future<Output = 
         mdns,
         test_devices,
     } = opts;
-    let state = paths::service_state_dir().context("preparing the state directory")?;
+    let state = paths::state_dir().context("preparing the state directory")?;
     let id = identity::load_or_create(&state, "server")?;
     let acceptor = TlsAcceptor::from(server_config(&id)?);
     let (stop_tx, stop_rx) = tokio::sync::watch::channel(false);
@@ -605,7 +592,6 @@ async fn serve_until(opts: Options, shutdown: impl std::future::Future<Output = 
         }
     });
 
-    // Keep the daemon alive for as long as we serve.
     let _mdns = if mdns {
         match advertise(&srv.name, &srv.id, &srv.fingerprint, port) {
             Ok(d) => Some(d),
@@ -636,7 +622,6 @@ async fn serve_until(opts: Options, shutdown: impl std::future::Future<Output = 
         }
     }
 
-    // Hand every claimed device back to the host before exiting.
     eprintln!("shutting down, releasing devices...");
     let _ = stop_tx.send(true);
     for _ in 0..100 {
