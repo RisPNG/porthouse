@@ -1,35 +1,21 @@
-# Use a USB device from one Linux machine on another Linux machine
+# Use a USB device from one Linux computer on another
 
-The machine with the device is the **server**; the machine that wants it is the **client**.
+The computer with the device shares it. The computer that wants it uses it.
 
-**Server** (has the device):
+On the computer with the device, install the package for your system (`sudo apt install ./netusb-*.deb` or `sudo dnf install ./netusb-*.rpm`, or build the Arch package from `packaging/arch`). Open netusb, go to Share devices, and press Allow a new computer to pair. Allow TCP port 7600 in your firewall from the other computer only.
 
-```bash
-tar xzf netusb-*-linux-x86_64.tar.gz && cd netusb-*-linux-x86_64
-sudo ./install.sh server
-sudo netusb-server pair              # prints a one-time PIN
-```
+On the computer that wants the device, install the same package. The client service loads the `vhci-hcd` kernel module that it needs. Open netusb. Add the first computer by address if it does not appear by itself, press Pair and enter the PIN, then press Use next to the device. Release gives it back.
 
-Allow TCP port 7600 in your firewall from the client machine only.
-
-**Client** (wants the device):
+The same steps work from a terminal, which is useful for servers without a screen:
 
 ```bash
-sudo ./install.sh client             # also loads the vhci-hcd kernel module it needs
-sudo cat /var/lib/netusb/ui.url      # open this address in your browser
+netusb-server pair                          # on the computer with the device: prints a one-time PIN
+netusb-client pair SERVER_IP --pin 1234-5678
+netusb-client list                          # shows servers, their devices, and what is in use here
+netusb-client use SERVER_IP 5-1             # 5-1 is the device's id from the list
+netusb-client release SERVER_IP 5-1
 ```
 
-In the page: **Add a server by address** (or wait for it to appear on the local network), **Pair…** with the PIN,
-then **Use** next to the device. **Release** gives it back.
+If your account cannot reach the services, add it to the `netusb` group with `sudo usermod -aG netusb "$USER"` and sign in again.
 
-From the command line instead:
-
-```bash
-sudo netusb-client pair SERVER_IP --pin 1234-5678
-netusb-client list --host SERVER_IP
-sudo netusb-client use SERVER_IP 5-1          # 5-1 is the device's id from the list
-```
-
-A mouse or keyboard disappears from the server while you use it; see [Share a Linux machine's mouse with
-Windows](linux-to-windows.md#getting-it-back) for how to get one back. If something fails, see
-[troubleshooting](troubleshooting.md).
+A mouse or keyboard disappears from the sharing computer while you use it. [Sharing a Linux mouse with Windows](linux-to-windows.md#getting-it-back) explains how to get one back. If something fails, see [troubleshooting](troubleshooting.md).
