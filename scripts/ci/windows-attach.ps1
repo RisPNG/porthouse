@@ -59,6 +59,10 @@ public class NuCursor { [DllImport("user32.dll")] public static extern bool GetC
 function Cursor { $p = New-Object NuPoint; [void][NuCursor]::GetCursorPos([ref]$p); return "$($p.X),$($p.Y)" }
 $before = Cursor
 Write-Host "cursor before: $before"
+# Control: with nothing attached the pointer must be perfectly still, or movement proves nothing.
+$still = @{}
+for ($i = 0; $i -lt 8; $i++) { $still[(Cursor)] = $true; Start-Sleep -Milliseconds 400 }
+Check 'control: the pointer is still before attach' ($still.Count -eq 1) "(saw $($still.Keys -join ' | '))"
 
 $cp = Start-Process -FilePath $cli -ArgumentList 'use', "127.0.0.1:$port", '99-1', '--seconds', '40' `
     -RedirectStandardOutput "$work\use.out" -RedirectStandardError "$work\use.err" -PassThru -NoNewWindow
@@ -96,6 +100,9 @@ Check 'client exited after its time limit' $cp.HasExited
 Start-Sleep -Seconds 3
 $gone = -not (Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue | Where-Object { $_.InstanceId -like 'USB\VID_1209&PID_0001*' })
 Check 'the virtual device is gone after release' $gone
+$after = @{}
+for ($i = 0; $i -lt 8; $i++) { $after[(Cursor)] = $true; Start-Sleep -Milliseconds 400 }
+Check 'control: the pointer is still again after release' ($after.Count -eq 1) "(saw $($after.Keys -join ' | '))"
 Write-Host '--- usbip port'
 & $usbip port 2>&1 | Write-Host
 

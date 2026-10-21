@@ -24,6 +24,9 @@ if [ ! -d /sys/devices/platform/vhci_hcd.0 ]; then
 fi
 ok "vhci_hcd is loaded"
 
+# The HID driver is normally autoloaded when the device appears, but not always quickly; load it first.
+modprobe usbhid 2>&1 | head -2; modprobe hid-generic 2>&1 | head -2
+
 echo "== server, pairing"
 mkdir -p "$W/s" "$W/c"
 NETUSB_STATE_DIR=$W/s "$SRV" run --no-mdns --port $PORT --test-device mouse > "$W/server.log" 2>&1 & SP=$!
@@ -36,7 +39,8 @@ echo "== attach for 40 seconds"
 NETUSB_STATE_DIR=$W/c "$CLI" use 127.0.0.1:$PORT 99-1 --seconds 40 > "$W/use.out" 2> "$W/use.err" & CP=$!
 for _ in $(seq 1 30); do grep -q attached "$W/use.out" && break; sleep 1; done
 grep -q attached "$W/use.out" && ok "client reports the device attached" || bad "client never attached"
-sleep 4
+# Enumeration and driver binding take a moment; wait for the input device instead of guessing.
+for _ in $(seq 1 40); do grep -q "netusb virtual mouse" /proc/bus/input/devices && break; sleep 0.5; done
 
 echo "== diagnostics"
 echo "--- lsusb -t"; lsusb -t 2>&1 | head -20
@@ -46,7 +50,6 @@ for d in /sys/bus/usb/devices/*; do
   case "$d" in *:1.*) [ "$(cat "$(dirname "$d")/$(basename "$d" | cut -d: -f1)/idVendor" 2>/dev/null)" = 1209 ] && echo "  $(basename "$d") driver=$(basename "$(readlink "$d/driver" 2>/dev/null)" 2>/dev/null)";; esac
 done
 echo "--- modules"; lsmod | grep -E 'hid|vhci|usbip|evdev|input' || true
-modprobe usbhid 2>&1 | head -2; modprobe hid-generic 2>&1 | head -2
 echo "--- dmesg (usb/hid/vhci)"; dmesg 2>/dev/null | grep -i -E 'vhci|usb 1-|hid|input' | tail -25 || true
 sleep 2
 
@@ -96,7 +99,7 @@ print(f"  {len(reports)} reports, distinct movements: {sorted(moves)}")
 sys.exit(0 if len(reports) == 60 and moves <= {(3, 0), (0, 3), (-3, 0), (0, -3)} and len(moves) >= 2 else 1)
 PY
 else
-  echo "  (pyusb not installed; skipped)"
+  bad "pyusb is not installed, so the raw interrupt check could not run"
 fi
 
 echo "== release"

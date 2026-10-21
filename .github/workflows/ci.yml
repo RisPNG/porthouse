@@ -44,7 +44,8 @@ jobs:
         run: |
           uname -r
           sudo apt-get update -y >/dev/null
-          sudo apt-get install -y "linux-modules-extra-$(uname -r)" usbutils python3-usb || true
+          sudo apt-get install -y usbutils python3-usb
+          sudo apt-get install -y "linux-modules-extra-$(uname -r)" || echo "no modules-extra package for this kernel (fine if vhci loads)"
           sudo modprobe vhci-hcd || true
           ls /sys/devices/platform | grep -i vhci || echo "no vhci_hcd platform device"
       - name: attach and move the pointer
@@ -84,3 +85,16 @@ jobs:
       - name: install driver, attach, move the pointer
         shell: pwsh
         run: ./scripts/ci/windows-attach.ps1
+
+  windows-installer:
+    name: windows installer scripts (real scheduled tasks, firewall, state dirs)
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: toolchain
+        run: rustup show
+      - name: build release
+        run: cargo build --release
+      - name: install, use, uninstall
+        shell: pwsh
+        run: ./scripts/ci/windows-installer.ps1
