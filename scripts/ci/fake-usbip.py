@@ -100,7 +100,7 @@ def exercise(drv):
         msg = b"hello through the real engine"
         st, actual = drv.bulk_out(msg)
         record("bulk OUT reports the bytes written", st == 0 and actual == len(msg), f"status={st} actual={actual}")
-        st, back = drv.bulk_in(64)
+        st, back = drv.bulk_in(512)
         record("bulk IN returns what was written", st == 0 and back == msg, f"status={st} {back!r}")
 
         payload = bytes((i * 7) % 251 for i in range(4096))
@@ -110,13 +110,13 @@ def exercise(drv):
         record("4096-byte bulk transfer round trip", ok_out and st2 == 0 and back == payload, f"out={st}/{actual} in={st2}/{len(back)}")
 
         # A read with nothing queued blocks; cancelling it must answer the unlink and not the read.
-        target = drv.submit(1, 1, 64)
+        target = drv.submit(1, 1, 512)
         time.sleep(0.5)
         ul = drv.unlink(target)
         kind, seq, status = drv.ret()[:3]
         record("cancelling a pending bulk read answers the unlink with -104", (kind, seq, status) == ("unlink", ul, -104), f"{kind} seq={seq} status={status}")
         st, actual = drv.bulk_out(b"after the cancel")
-        st2, back = drv.bulk_in(64)
+        st2, back = drv.bulk_in(512)
         record("the endpoint still works after a cancel and loses no data", st == 0 and st2 == 0 and back == b"after the cancel", f"{st}/{st2} {back!r}")
 
         def attempt(name, fn):
@@ -128,33 +128,42 @@ def exercise(drv):
                 raise
 
         def full_packet():
-            drv.bulk_out(b"F" * 64)
-            st, back = drv.bulk_in(64)
-            return st == 0 and back == b"F" * 64, f"status={st} got {len(back)} bytes {back[:12]!r}"
+            drv.bulk_out(b"F" * 512)
+            st, back = drv.bulk_in(512)
+            return st == 0 and back == b"F" * 512, f"status={st} got {len(back)} bytes"
 
-        attempt("a full-packet (64 of 64) read completes", full_packet)
+        attempt("a full-packet (512 of 512) read completes", full_packet)
 
         def second_full_packet():
-            drv.bulk_out(b"G" * 64)
-            st, back = drv.bulk_in(64)
-            return st == 0 and back == b"G" * 64, f"status={st} got {len(back)} bytes"
+            drv.bulk_out(b"G" * 512)
+            st, back = drv.bulk_in(512)
+            return st == 0 and back == b"G" * 512, f"status={st} got {len(back)} bytes"
 
         attempt("a second consecutive full-packet read completes", second_full_packet)
 
-        def two_reads_from_128():
-            drv.bulk_out(b"H" * 128)
-            a = drv.bulk_in(64)
-            b = drv.bulk_in(64)
-            return a[0] == 0 and b[0] == 0 and a[1] + b[1] == b"H" * 128, f"{len(a[1])}+{len(b[1])} bytes"
+        def two_reads_from_1024():
+            drv.bulk_out(b"H" * 1024)
+            a = drv.bulk_in(512)
+            b = drv.bulk_in(512)
+            return a[0] == 0 and b[0] == 0 and a[1] + b[1] == b"H" * 1024, f"{len(a[1])}+{len(b[1])} bytes"
 
-        attempt("two full-packet reads drain 128 queued bytes", two_reads_from_128)
+        attempt("two full-packet reads drain 1024 queued bytes", two_reads_from_1024)
+
+        def overflow():
+            # Asking for less than a packet while the device holds more cannot work on a bulk endpoint.
+            # What matters is that it is reported as an overflow (-75), not returned as a clean short read.
+            drv.bulk_out(b"O" * 128)
+            st, back = drv.bulk_in(64)
+            return st == -75, f"status={st} got {len(back)} bytes"
+
+        attempt("a read smaller than the data on a bulk endpoint reports overflow (-75)", overflow)
 
         for i in range(20):
             drv.bulk_out(bytes([i]) * 10)
         want = b"".join(bytes([i]) * 10 for i in range(20))
         got = b""
-        while len(got) < len(want):  # a read returns whatever is queued, up to 64 bytes
-            st, chunk = drv.bulk_in(64)
+        while len(got) < len(want):  # a read returns whatever is queued, up to 512 bytes
+            st, chunk = drv.bulk_in(512)
             assert st == 0, st
             got += chunk
         record("20 back-to-back transfers keep their order", got == want, f"got {len(got)} bytes")

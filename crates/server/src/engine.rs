@@ -159,10 +159,15 @@ async fn worker<T: BulkOrInterrupt, D: EndpointDirection>(mut ep: Endpoint<T, D>
                     Ok(()) => {
                         let reply = if is_in {
                             let mut data = c.buffer.into_vec();
+                            // The read buffer is rounded up to a whole number of packets, so a device can
+                            // hand back more than the host asked for. Those bytes cannot be returned to the
+                            // device, and a real USB stack reports this case as an overflow rather than
+                            // pretending the transfer was clean, so do the same instead of dropping them silently.
+                            let overflow = c.actual_len > p.req_len;
                             data.truncate(c.actual_len.min(p.req_len));
                             Reply::Submit {
                                 seq: p.seq,
-                                status: 0,
+                                status: if overflow { usbip::EOVERFLOW } else { 0 },
                                 actual: data.len() as u32,
                                 data,
                             }

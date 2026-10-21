@@ -137,7 +137,7 @@ fn list_devices(srv: &Server) -> Result<Vec<DeviceInfo>> {
             vendor_id: emulated::VENDOR_ID,
             product_id: kind.product_id(),
             class: 0,
-            speed: Speed::Full,
+            speed: kind.speed_class(),
             manufacturer: Some("netusb".into()),
             product: Some(format!("{} (test device)", kind.product_name())),
             serial: Some(kind.serial().into()),

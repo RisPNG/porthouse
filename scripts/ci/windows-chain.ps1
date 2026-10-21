@@ -96,7 +96,7 @@ $results = Get-Content "$work\out\results.txt" -ErrorAction SilentlyContinue
 $results | ForEach-Object { Write-Host "   $_" }
 $nPass = ($results | Where-Object { $_ -like 'PASS*' }).Count
 $nFail = ($results | Where-Object { $_ -like 'FAIL*' }).Count
-Check 'all 13 engine checks passed' (($nPass -eq 13) -and ($nFail -eq 0)) "($nPass passed, $nFail failed)"
+Check 'all 14 engine checks passed' (($nPass -eq 14) -and ($nFail -eq 0)) "($nPass passed, $nFail failed)"
 Stop-Process -Id $c2.Id -Force -ErrorAction SilentlyContinue   # the exercise is over; do not wait out the timer
 
 Write-Host '--- client 1'; Get-Content "$work\c1.out", "$work\c1.err" -ErrorAction SilentlyContinue | Write-Host

@@ -27,6 +27,8 @@ pub const VENDOR_ID: u16 = 0x1209; // pid.codes
 const REPORT_EVERY: Duration = Duration::from_millis(10);
 /// The vendor request code announced in the Microsoft OS string descriptor.
 const MS_VENDOR_CODE: u8 = 0x21;
+/// Bulk packet size of the (high-speed) loopback device.
+const BULK_PACKET: usize = 512;
 /// Interface GUID Windows registers for the loopback device (what `nusb` opens it by).
 const LOOPBACK_GUID: &str = "{3a9d2d1c-6a4e-4f50-9b0e-5c1b7d2e8f41}";
 
@@ -77,6 +79,22 @@ impl Kind {
         }
     }
 
+    /// Link speed as a Linux `usb_device_speed` number. The loopback device is high speed, which is
+    /// also what the Windows virtual host controller presents, so its 512-byte bulk packets are real.
+    fn speed(self) -> u32 {
+        match self {
+            Kind::Mouse => 2,    // full
+            Kind::Loopback => 3, // high
+        }
+    }
+
+    pub fn speed_class(self) -> netusb_proto::Speed {
+        match self {
+            Kind::Mouse => netusb_proto::Speed::Full,
+            Kind::Loopback => netusb_proto::Speed::High,
+        }
+    }
+
     fn devnum(self) -> u32 {
         match self {
             Kind::Mouse => 1,
@@ -89,7 +107,7 @@ impl Kind {
             busid: self.busid().into(),
             busnum: 99,
             devnum: self.devnum(),
-            speed: 2, // full speed
+            speed: self.speed(),
             vendor_id: VENDOR_ID,
             product_id: self.product_id(),
             bcd_device: 0x0100,
@@ -140,8 +158,8 @@ fn configuration_descriptor(kind: Kind) -> Vec<u8> {
         Kind::Loopback => vec![
             9, 2, 32, 0, 1, 1, 0, 0x80, 50, // configuration: 32 bytes total, 1 interface, bus powered
             9, 4, 0, 0, 2, 0xFF, 0, 0, 0, // interface 0: vendor specific, 2 endpoints
-            7, 5, 0x01, 2, 64, 0, 0, // endpoint 1 OUT, bulk, 64 bytes
-            7, 5, 0x81, 2, 64, 0, 0, // endpoint 1 IN, bulk, 64 bytes
+            7, 5, 0x01, 2, 0x00, 0x02, 0, // endpoint 1 OUT, bulk, 512 bytes (high speed)
+            7, 5, 0x81, 2, 0x00, 0x02, 0, // endpoint 1 IN, bulk, 512 bytes (high speed)
         ],
     }
 }
@@ -245,7 +263,7 @@ fn control(kind: Kind, setup: [u8; 8]) -> Control {
             1 => Control::Data(device_descriptor(kind)),
             2 => Control::Data(configuration_descriptor(kind)),
             3 => string_descriptor(kind, dindex).map(Control::Data).unwrap_or(Control::Stall),
-            _ => Control::Stall, // device qualifier / other speed: full-speed devices stall these
+            _ => Control::Stall, // device qualifier / other speed: a plain 2.00 device may stall these
         },
         (0x80, 0x00) | (0x81, 0x00) | (0x82, 0x00) => Control::Data(vec![0, 0]), // GET_STATUS
         (0x00, 0x09) | (0x01, 0x0b) | (0x00, 0x05) => ok(),                      // set configuration / interface / address
@@ -454,10 +472,13 @@ async fn read_loop<R: AsyncRead + Unpin>(rd: &mut R, out: &mpsc::Sender<Reply>, 
                                 let notified = sh.echo_ready.notified();
                                 tokio::pin!(notified);
                                 notified.as_mut().enable();
-                                let data: Vec<u8> = {
+                                // Like real hardware: asked for less than a packet while it holds more, the
+                                // device still sends a whole packet and the host sees an overflow.
+                                let (mut data, overflow): (Vec<u8>, bool) = {
                                     let mut q = sh.echo.lock().unwrap();
-                                    let n = q.len().min(len);
-                                    q.drain(..n).collect()
+                                    let overflow = len < BULK_PACKET && q.len() > len;
+                                    let n = if overflow { q.len().min(BULK_PACKET) } else { q.len().min(len) };
+                                    (q.drain(..n).collect(), overflow)
                                 };
                                 if !data.is_empty() {
                                     if sh.pending.lock().unwrap().remove(&seq).is_none() {
@@ -468,7 +489,18 @@ async fn read_loop<R: AsyncRead + Unpin>(rd: &mut R, out: &mpsc::Sender<Reply>, 
                                         }
                                         return;
                                     }
-                                    let _ = out2.send(submit_reply(seq, 0, data)).await;
+                                    if overflow {
+                                        data.truncate(len);
+                                    }
+                                    let status = if overflow { usbip::EOVERFLOW } else { 0 };
+                                    let _ = out2
+                                        .send(Reply::Submit {
+                                            seq,
+                                            status,
+                                            actual: data.len() as u32,
+                                            data,
+                                        })
+                                        .await;
                                     return;
                                 }
                                 notified.await;
@@ -831,7 +863,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn loopback_in_waits_for_data_and_preserves_order_and_length_limits() {
+    async fn loopback_in_waits_for_data_and_preserves_order() {
         let mut d = Driver::new(Kind::Loopback);
         // An IN request issued first must wait until something is written.
         let seq = d.send_bulk_in(64).await;
@@ -840,12 +872,39 @@ mod tests {
         d.bulk_out(b"first").await;
         let (rseq, _, data) = d.read_ret().await;
         assert_eq!((rseq, data.as_slice()), (seq, b"first".as_slice()));
-        // A short IN buffer returns a prefix; the rest stays queued, in order.
-        d.bulk_out(b"0123456789").await;
-        d.send_bulk_in(4).await;
-        assert_eq!(d.read_ret().await.2, b"0123");
-        d.send_bulk_in(64).await;
-        assert_eq!(d.read_ret().await.2, b"456789");
+        // Packet-sized reads drain a larger queue in order, one packet at a time.
+        let payload: Vec<u8> = (0..1024u32).map(|i| (i % 251) as u8).collect();
+        d.bulk_out(&payload).await;
+        d.send_bulk_in(512).await;
+        assert_eq!(d.read_ret().await.2, &payload[..512]);
+        d.send_bulk_in(512).await;
+        assert_eq!(d.read_ret().await.2, &payload[512..]);
+    }
+
+    #[tokio::test]
+    async fn a_read_smaller_than_a_packet_while_more_is_queued_overflows_like_hardware() {
+        let mut d = Driver::new(Kind::Loopback);
+        d.bulk_out(&[7u8; 128]).await;
+        let seq = d.send_bulk_in(64).await;
+        let (rseq, st, data) = d.read_ret().await;
+        assert_eq!(
+            (rseq, st, data.len()),
+            (seq, usbip::EOVERFLOW, 64),
+            "only the requested 64 bytes are returned, with an overflow status"
+        );
+        // The device sent a whole packet, so the remainder is gone from the device too.
+        d.bulk_out(b"next").await;
+        d.send_bulk_in(512).await;
+        assert_eq!(d.read_ret().await.2, b"next");
+    }
+
+    #[test]
+    fn the_loopback_device_is_a_consistent_high_speed_device() {
+        assert_eq!(Kind::Loopback.attach_info().speed, 3, "high speed");
+        let cfg = configuration_descriptor(Kind::Loopback);
+        assert_eq!(&cfg[22..24], &[0x00, 0x02], "OUT endpoint: 512-byte packets");
+        assert_eq!(&cfg[29..31], &[0x00, 0x02], "IN endpoint: 512-byte packets");
+        assert_eq!(Kind::Mouse.attach_info().speed, 2, "the mouse stays a full-speed device");
     }
 
     #[tokio::test]

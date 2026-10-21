@@ -52,7 +52,7 @@ for _ in $(seq 1 60); do [ -e "$W/out/done" ] && break; sleep 0.5; done
 [ -e "$W/out/done" ] && ok "the exercise finished" || bad "the exercise never finished"
 cat "$W/out/results.txt" 2>/dev/null | cut -c1-150
 N_PASS=$(grep -c '^PASS' "$W/out/results.txt" 2>/dev/null); N_FAIL=$(grep -c '^FAIL' "$W/out/results.txt" 2>/dev/null)
-[ "${N_PASS:-0}" -eq 13 ] && [ "${N_FAIL:-1}" -eq 0 ] && ok "all 13 engine checks passed" || bad "engine checks: ${N_PASS:-0} passed, ${N_FAIL:-?} failed"
+[ "${N_PASS:-0}" -eq 14 ] && [ "${N_FAIL:-1}" -eq 0 ] && ok "all 14 engine checks passed" || bad "engine checks: ${N_PASS:-0} passed, ${N_FAIL:-?} failed"
 sleep 2
 grep -q "attached $BUSID" "$W/b.log" && ok "server B logged the attach" || bad "no attach logged by B"
 

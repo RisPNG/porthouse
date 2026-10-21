@@ -35,6 +35,7 @@ pub const EPIPE: i32 = -32;
 pub const EPROTO: i32 = -71;
 pub const EIO: i32 = -5;
 pub const EINVAL: i32 = -22;
+pub const EOVERFLOW: i32 = -75;
 pub const ENOSYS: i32 = -38;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
