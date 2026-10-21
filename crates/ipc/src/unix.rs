@@ -72,6 +72,9 @@ impl Listener {
         if allowed(cred.uid(), cred.gid(), self.service_uid) {
             Ok(Some(stream))
         } else {
+            // Say why, so the person can fix it instead of seeing a connection that just drops.
+            let reply = format!("{{\"id\":0,\"error\":\"not allowed to use this netusb service; add yourself to the `{GROUP}` group and sign in again\"}}\n");
+            let _ = stream.try_write(reply.as_bytes());
             Ok(None)
         }
     }

@@ -10,7 +10,7 @@ USER_NAME=${SUDO_USER:?run with sudo from a normal account}
 PASS=0; FAIL=0
 ok()  { echo "  PASS  $1"; PASS=$((PASS+1)); }
 bad() { echo "  FAIL  $1"; FAIL=$((FAIL+1)); }
-W=$(mktemp -d /tmp/netusb-install.XXXXXX); chmod 755 "$W"
+W=$(mktemp -d /tmp/netusb-install.XXXXXX); chmod 777 "$W"
 trap 'systemctl status netusb-server netusb-client --no-pager 2>&1 | head -30; journalctl -u netusb-server -u netusb-client --no-pager -n 60 2>&1 | tail -60; rm -rf "$W"' EXIT
 as_member() { sudo -u "$USER_NAME" sg netusb -c "$*"; }
 as_plain()  { sudo -u "$USER_NAME" "$@"; }
@@ -28,7 +28,8 @@ UID_NOW=$(id -u "$USER_NAME")
 if grep -qE '^STATE=(active|online)$' "/run/systemd/users/$UID_NOW" 2>/dev/null; then
   echo "  SKIP  $USER_NAME has a login session here, so access without the group is allowed by design"
 else
-  as_plain netusb-client list 2>&1 | grep -qi "not allowed" && ok "a user outside the group is refused, with a message that says what to do" || bad "unexpected answer for a user outside the group"
+  as_plain netusb-client list > "$W/denied.out" 2>&1
+  grep -qi "not allowed" "$W/denied.out" && ok "a user outside the group is refused, with a message that says what to do" || { bad "unexpected answer for a user outside the group"; cat "$W/denied.out"; }
 fi
 usermod -aG netusb "$USER_NAME"
 as_member netusb-client list > "$W/list.out" 2>&1 && ok "a member of the netusb group can talk to the client service" || { bad "group member refused"; cat "$W/list.out"; }
@@ -37,7 +38,7 @@ echo "== a test device, pairing, attaching"
 mkdir -p /etc/systemd/system/netusb-server.service.d
 printf '[Service]\nExecStart=\nExecStart=/usr/bin/netusb-server run --test-device mouse\n' > /etc/systemd/system/netusb-server.service.d/test.conf
 systemctl daemon-reload && systemctl restart netusb-server
-for _ in $(seq 1 50); do [ -S /run/netusb/server.sock ] && break; sleep 0.2; done
+for _ in $(seq 1 50); do as_member netusb-server clients > /dev/null 2>&1 && break; sleep 0.2; done
 PIN=$(as_member netusb-server pair | sed -n 's/.*PIN:  \([0-9-]*\).*/\1/p')
 [ -n "$PIN" ] && ok "a group member opened a pairing window through the service" || bad "no PIN"
 as_member netusb-client pair 127.0.0.1 --pin "$PIN" 2>&1 | grep -q "paired with" && ok "the client service paired with the server service" || bad "pairing failed"
