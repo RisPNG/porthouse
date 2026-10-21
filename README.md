@@ -8,11 +8,10 @@ The server runs as a service and announces itself on the network. The client fin
 automatically, shows their devices in a small web interface, and attaches a device with one click.
 Everything is encrypted, and a new client must be approved with a one-time PIN.
 
-> **Status:** the Linux server and client are implemented and tested, including a real USB mouse
-> enumerated end to end. The Windows client is implemented (attach goes through the `usbip-win2`
-> driver) and its whole data path is tested on Linux with a stand-in driver, but the Windows
-> programs themselves have **never been run on Windows**. See
-> [Status and limitations](#status-and-limitations) and `packaging/windows/README-WINDOWS.txt`.
+> **Status:** Linux and Windows server and client are implemented and exercised end to end in CI on
+> real machines with real drivers (see [Continuous integration](#continuous-integration)). What has
+> *not* been done is a run on your own hardware: physical USB devices, Windows desktop editions, and
+> a person moving a physical mouse. See [Status and limitations](#status-and-limitations).
 
 ## Quick start (Linux)
 
@@ -97,7 +96,7 @@ certificate, forged `Host`, cross-site writes, plaintext and random bytes).
 ## Testing
 
 ```bash
-cargo test                       # 34 unit tests (framing, USB/IP, pairing, trust stores, vhci parsing, import shim)
+cargo test                       # 54 unit tests (framing, USB/IP, pairing, trust stores, vhci parsing, import shim)
 ./scripts/e2e-security.sh        # 17 attack tests against pairing and authorization; no root
 ./scripts/e2e-ui.sh              # 25 tests of the web interface; no root
 ./scripts/e2e-claim.sh 5-1       # claim and release of a REAL device: leaving, SIGTERM, SIGKILL recovery
@@ -108,17 +107,33 @@ sudo ./scripts/live-test.sh 5-1  # full loopback: a local device re-attached thr
 `e2e-claim.sh` and `live-test.sh` take the device away from the host for a few seconds at a time and
 always restore it. Use a device you can spare, and see the notes at the top of each script.
 
-## Testing without hardware: the virtual mouse
+## Continuous integration
+
+Every push runs these on GitHub-hosted machines (`.github/workflows/ci.yml`):
+
+| Job | What it proves |
+|---|---|
+| linux build, lint, tests | format, clippy with warnings as errors, 54 unit tests, the pairing/authorization attack suite and the web-interface suite |
+| linux attach | real `vhci_hcd`: the virtual mouse enumerates and delivers pointer events (and, independent of any HID driver, raw interrupt reports read through libusb) |
+| linux engine | a kernel device (the virtual loopback device attached via `vhci_hcd`) shared by a second server using the real `usbfs` engine, driven by a fake importer |
+| windows build, tests, smoke | the Windows programs run, pair, refuse unpaired clients, list devices |
+| windows attach | installs the real `usbip-win2` driver, attaches the virtual mouse, checks Windows enumerates a HID mouse and the pointer moves (with a still-pointer control before and after) |
+| windows engine | the virtual loopback device is bound to `winusb.sys` by Windows itself (from Microsoft OS descriptors), shared by the native Windows server, and driven through control, bulk, cancel, ordering and overflow checks |
+| windows installer | the PowerShell installer and uninstaller: scheduled tasks as SYSTEM and as the user, firewall rules, protected state directory, pairing between them, web interface, clean removal |
+
+The Windows programs built there use a statically linked C runtime and import only Windows system DLLs.
+
+## Testing without hardware: the virtual devices
 
 `netusb-server run --test-device mouse` adds a software HID mouse (`99-1`, VID:PID 1209:0001) that
-draws a small square with the pointer of whoever attaches it. It makes the whole attach path, kernel
-or driver included, testable on a machine with no spare USB hardware, and it carries real interrupt
-traffic. It is opt-in because it moves a pointer.
+draws a small square with the pointer of whoever attaches it; `--test-device loopback` adds a
+high-speed vendor device (`99-2`, 1209:0002) with a bulk OUT and a bulk IN endpoint that echo data
+and Microsoft OS descriptors that make Windows bind WinUSB to it. Together they make the whole attach
+path, kernel or driver included, testable on a machine with no spare USB hardware, with real
+interrupt and bulk traffic. They are opt-in because the mouse moves a pointer.
 
-`.github/workflows/ci.yml` uses it: on a real Windows runner it installs the `usbip-win2` driver,
-attaches the virtual mouse through `netusb-client.exe`, and checks that Windows enumerates the device
-and the pointer moves; on a Linux runner it does the same with `vhci_hcd` and reads the resulting
-input events. `netusb-client use HOST BUSID --seconds N` attaches for a fixed time.
+`netusb-client use HOST BUSID --seconds N` attaches for a fixed time, and `NETUSB_TRACE=1` makes the
+server log every URB it handles.
 
 ## Status and limitations
 
@@ -129,10 +144,10 @@ input events. `netusb-client use HOST BUSID --seconds N` attaches for a fixed ti
 | Mouse movement over the full path | **not yet confirmed**: the test machine was driven remotely; needs a run at the physical mouse |
 | Web interface, mDNS discovery, pairing UI | done, tested (API, security, and a browser pass) |
 | systemd units and installer | written; unit files validated with `systemd-analyze`, installer **not run** |
-| Windows client | implemented: a local USB/IP "server" on loopback answers the `usbip-win2` driver's import handshake and relays its URBs over TLS. Cross-built to `dist/netusb-windows-x64.zip`. **Never run on Windows**; needs the usbip-win2 driver installed and Administrator rights |
-| Windows data path, tested on Linux | the shim, the importer orchestration and the full chain (fake driver, TLS relay, real server engine, a real USB device, descriptors compared byte for byte) pass in `e2e-windows-path.sh`. The real `usbip.exe` and kernel driver are not involved |
-| Windows server | cross-built, never run. Devices must use the WinUSB driver (for example via Zadig); no automatic driver install; composite devices are the least likely to work |
-| Windows installer, scheduled tasks, firewall rules | written (`packaging/windows/*.ps1`), **untested** and not even syntax-checked (no PowerShell here) |
+| Windows client | **tested on real Windows in CI** (GitHub Windows Server 2022): attaches through the real `usbip-win2` driver; Windows enumerates a HID mouse and the pointer moves. Not yet run on a desktop edition or by you |
+| Windows server (WinUSB) | **tested on real Windows in CI**: shares a virtual WinUSB device bound by `winusb.sys` itself (control, bulk, cancel, ordering, overflow). Physical hardware and composite devices untested; devices must use the WinUSB driver (e.g. via Zadig) |
+| Windows installer, scheduled tasks, firewall, protected state dir | **tested on real Windows in CI**: install, SYSTEM server, user client, pairing between them, web interface, uninstall |
+| Linux engine on a real kernel device | **tested in CI**: bulk and control through `usbfs`, cancel, ordering, overflow |
 | Isochronous transfers (webcams, USB audio) | **not supported**: such URBs are refused. Bulk, interrupt and control devices work |
 | Changing the active configuration from the client | not supported (refused); the device's current configuration is used |
 | Multiple controllers, IPv6-only networks, auto-reattach, per-device access rules | not done |
@@ -140,10 +155,14 @@ input events. `netusb-client use HOST BUSID --seconds N` attaches for a fixed ti
 ## Windows
 
 ```bash
-./scripts/package-windows.sh     # cross-builds from Linux (needs a zig toolchain) -> dist/netusb-windows-x64.zip
+./scripts/fetch-windows-package.sh   # -> dist/netusb-windows-x64.zip, built and tested by CI
 ```
 
-Copy the zip to a Windows 10/11 machine and follow `README-WINDOWS.txt` inside it. The client needs the
-[usbip-win2](https://github.com/vadimgrn/usbip-win2/releases) driver; netusb uses its `usbip.exe` as the
-importer. On Windows the driver opens its own connection and performs the standard USB/IP import, so
-netusb answers that on a loopback port protected by a random one-time token, and relays the traffic.
+The zip contains the programs from the CI run that passed on real Windows (a statically linked C
+runtime, nothing to install besides the `usbip-win2` driver for the client), the PowerShell installer
+and uninstaller, and `README-WINDOWS.txt`. `./scripts/package-windows.sh` is an alternative that
+cross-builds from Linux with zig, but those binaries are *not* what CI tests.
+
+On Windows the `usbip-win2` driver opens its own connection and performs the standard USB/IP import,
+so netusb answers that on a loopback port protected by a random one-time token, and relays the
+traffic over TLS.
