@@ -24,7 +24,7 @@ modules:
       - type: dir
         path: ../..
     post-install:
-      - install -Dm644 LICENSE /app/share/licenses/io.github.rispng.porthouse/LICENSE
+      - install -Dm644 ../LICENSE /app/share/licenses/io.github.rispng.porthouse/LICENSE
       - mv /app/share/applications/porthouse.desktop /app/share/applications/io.github.rispng.porthouse.desktop
       - mv /app/share/icons/hicolor/scalable/apps/porthouse.svg /app/share/icons/hicolor/scalable/apps/io.github.rispng.porthouse.svg
       - sed -i 's/^Icon=porthouse/Icon=io.github.rispng.porthouse/' /app/share/applications/io.github.rispng.porthouse.desktop
