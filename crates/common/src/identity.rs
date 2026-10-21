@@ -70,13 +70,26 @@ pub fn write_private(path: &Path, data: &[u8]) -> Result<()> {
 }
 
 /// When running under sudo, hand a file we just created back to the invoking user, so a later
-/// unprivileged run can still read it.
+/// unprivileged run can still read it. Only files inside that user's own home are touched: system
+/// state (such as the server's `/var/lib/netusb`) must stay owned by root.
 #[cfg(unix)]
 pub fn give_to_sudo_user(path: &Path) {
     let id = |k: &str| std::env::var(k).ok().and_then(|v| v.parse::<u32>().ok());
-    if let (Some(uid), Some(gid)) = (id("SUDO_UID"), id("SUDO_GID")) {
+    let (Some(uid), Some(gid)) = (id("SUDO_UID"), id("SUDO_GID")) else {
+        return;
+    };
+    let Some(home) = std::env::var("SUDO_USER").ok().and_then(|u| crate::paths::home_of(&u)) else {
+        return;
+    };
+    if belongs_under(&home, path) {
         let _ = std::os::unix::fs::chown(path, Some(uid), Some(gid));
     }
+}
+
+/// Is `path` inside `home`? Compared by path components, so `/home/ann2` is not inside `/home/ann`.
+#[cfg(unix)]
+pub fn belongs_under(home: &Path, path: &Path) -> bool {
+    path.starts_with(home) && !path.components().any(|c| c == std::path::Component::ParentDir)
 }
 
 #[cfg(not(unix))]
@@ -85,6 +98,25 @@ pub fn give_to_sudo_user(_path: &Path) {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn only_paths_inside_the_users_home_are_handed_over() {
+        let home = Path::new("/home/ann");
+        assert!(belongs_under(home, Path::new("/home/ann/.local/state/netusb/client.pem")));
+        assert!(
+            !belongs_under(home, Path::new("/var/lib/netusb/server.pem")),
+            "system state stays with root"
+        );
+        assert!(
+            !belongs_under(home, Path::new("/home/ann2/x")),
+            "a different user whose name starts the same"
+        );
+        assert!(
+            !belongs_under(home, Path::new("/home/ann/../bob/x")),
+            "a parent-directory escape is not inside the home"
+        );
+    }
 
     #[test]
     fn identity_is_created_once_and_reloaded_identically() {

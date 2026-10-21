@@ -6,6 +6,7 @@
 //! using (channel binding), so a man-in-the-middle cannot relay it.
 
 pub mod identity;
+pub mod net;
 pub mod paths;
 pub mod tls;
 pub mod trust;

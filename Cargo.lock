@@ -657,7 +657,7 @@ dependencies = [
 
 [[package]]
 name = "netusb-client"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -675,7 +675,7 @@ dependencies = [
 
 [[package]]
 name = "netusb-common"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "getrandom 0.4.3",
@@ -683,13 +683,14 @@ dependencies = [
  "rcgen",
  "rustls",
  "sha2",
+ "socket2",
  "subtle",
  "thiserror",
 ]
 
 [[package]]
 name = "netusb-proto"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "lz4_flex",
  "postcard",
@@ -699,7 +700,7 @@ dependencies = [
 
 [[package]]
 name = "netusb-server"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "mdns-sd",

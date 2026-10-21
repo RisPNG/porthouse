@@ -128,6 +128,7 @@ fn list_devices(srv: &Server) -> Result<Vec<DeviceInfo>> {
                 manufacturer: d.manufacturer_string().map(str::to_string),
                 product: d.product_string().map(str::to_string),
                 serial: d.serial_number().map(str::to_string),
+                input: d.interfaces().any(|i| i.class() == 3), // USB HID: mice, keyboards, game controllers
             }
         })
         .collect();
@@ -142,6 +143,7 @@ fn list_devices(srv: &Server) -> Result<Vec<DeviceInfo>> {
             product: Some(format!("{} (test device)", kind.product_name())),
             serial: Some(kind.serial().into()),
             in_use_by: in_use.get(kind.busid()).cloned(),
+            input: kind.is_input(),
         });
     }
     Ok(list)
@@ -415,6 +417,10 @@ async fn main() -> Result<()> {
                 _ => bail!("{fp:?} matches several clients; use more characters"),
             }
         }
+        Some("-V") | Some("--version") => {
+            println!("netusb-server {}", env!("CARGO_PKG_VERSION"));
+            return Ok(());
+        }
         Some("-h") | Some("--help") => {
             usage();
             return Ok(());
@@ -498,6 +504,7 @@ async fn main() -> Result<()> {
             accepted = listener.accept() => {
                 let (sock, peer) = accepted?;
                 let _ = sock.set_nodelay(true);
+                let _ = netusb_common::net::enable_keepalive(&sock);
                 let srv = srv.clone();
                 tokio::spawn(async move {
                     if let Err(e) = serve(sock, srv).await {

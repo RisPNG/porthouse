@@ -1,0 +1,73 @@
+name: release
+
+# Push a tag such as v0.2.0 (after bumping the version in Cargo.toml and CHANGELOG.md) to publish.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: the tag matches the version in Cargo.toml and CHANGELOG.md
+        run: |
+          V=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          [ "${GITHUB_REF_NAME}" = "v$V" ] || { echo "tag ${GITHUB_REF_NAME} does not match Cargo.toml version $V" >&2; exit 1; }
+          grep -q "^## \[$V\]" CHANGELOG.md || { echo "CHANGELOG.md has no section for $V" >&2; exit 1; }
+
+  linux:
+    needs: check
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: toolchain
+        run: |
+          rustup show
+          rustup target add x86_64-unknown-linux-musl
+          sudo apt-get update -y >/dev/null
+          sudo apt-get install -y musl-tools >/dev/null
+      - run: ./scripts/package-linux.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/netusb-*-linux-x86_64.tar.gz
+
+  windows:
+    needs: check
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: toolchain
+        run: rustup show
+      - run: cargo build --release
+      - name: assemble the zip
+        shell: pwsh
+        run: ./scripts/package-windows.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/netusb-*-windows-x64.zip
+
+  publish:
+    needs: [linux, windows]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+      - name: checksums and notes
+        run: |
+          cd assets && sha256sum netusb-* > SHA256SUMS && cat SHA256SUMS && cd ..
+          V=${GITHUB_REF_NAME#v}
+          awk -v v="$V" '$0 ~ "^## \\[" v "\\]" {f=1; next} f && /^## \[/ {exit} f' CHANGELOG.md > notes.md
+          cat notes.md
+      - name: publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" assets/* --title "netusb ${GITHUB_REF_NAME#v}" --notes-file notes.md

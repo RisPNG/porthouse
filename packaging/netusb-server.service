@@ -5,7 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/netusb-server run
+ExecStart=@PREFIX@/bin/netusb-server run
 # SIGTERM makes the server hand every claimed device back to the host before it exits.
 KillSignal=SIGTERM
 TimeoutStopSec=15

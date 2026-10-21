@@ -95,6 +95,10 @@ async fn main() -> Result<()> {
             }
             return netusb_client::daemon::run(ctx, port).await;
         }
+        Some("-V") | Some("--version") => {
+            println!("netusb-client {}", env!("CARGO_PKG_VERSION"));
+            return Ok(());
+        }
         Some("-h") | Some("--help") => {
             usage();
             return Ok(());

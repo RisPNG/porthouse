@@ -51,7 +51,7 @@ def pstr(s): b = s.encode(); return bytes([len(b)]) + b
 ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT); ctx.minimum_version = ssl.TLSVersion.TLSv1_3
 ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE; ctx.load_cert_chain(pem)
 s = ctx.wrap_socket(socket.create_connection(("127.0.0.1", port)), server_hostname="netusb")
-s.sendall(frame(bytes([0, 3]) + pstr("holdtest"))); time.sleep(0.3); s.recv(65536)
+s.sendall(frame(bytes([0, 4]) + pstr("holdtest"))); time.sleep(0.3); s.recv(65536)
 s.sendall(frame(bytes([3]) + pstr(busid))); time.sleep(0.8); s.recv(65536)
 time.sleep(hold)
 EOF

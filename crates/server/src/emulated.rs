@@ -72,6 +72,10 @@ impl Kind {
         }
     }
 
+    pub fn is_input(self) -> bool {
+        self == Kind::Mouse
+    }
+
     pub fn serial(self) -> &'static str {
         match self {
             Kind::Mouse => "0001",

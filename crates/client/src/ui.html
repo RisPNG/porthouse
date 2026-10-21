@@ -182,9 +182,15 @@ function renderServer(sv) {
     const btn = mine ? el("span", { class: "chip ok", text: "in use here" })
       : other ? el("span", { class: "chip", text: `in use by ${d.in_use_by}` })
       : el("button", { class: "primary", text: busy.has(id) ? "Connecting…" : "Use", ...(busy.has(id) ? { disabled: "" } : {}),
-          onclick: () => act(id, () => api("/api/use", { addr: sv.addr, busid: d.busid }), "Connected") });
+          onclick: () => {
+            // A mouse or keyboard disappears from the machine sharing it, which can strand someone
+            // who has no other way to control that machine. Make that explicit before taking it.
+            if (d.input && !confirm(`"${devName(d)}" is a mouse or keyboard.\n\nWhile you use it here, ${sv.name} will not have it. Make sure ${sv.name} has another way to be controlled, and that you can release it from this page.\n\nUse it here?`)) return;
+            act(id, () => api("/api/use", { addr: sv.addr, busid: d.busid }), "Connected");
+          } });
     card.append(el("div", { class: "row" },
-      el("div", { class: "info" }, el("div", { class: "title", text: devName(d) }), el("div", { class: "sub", text: sub })), btn));
+      el("div", { class: "info" }, el("div", { class: "title", text: devName(d) }), el("div", { class: "sub", text: sub })),
+      d.input ? el("span", { class: "chip warn", title: "The sharing machine loses this device while you use it", text: "mouse / keyboard" }) : null, btn));
   }
   return card;
 }

@@ -5,8 +5,8 @@
 
 set -u
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-SRV=$ROOT/target/debug/netusb-server
-CLI=$ROOT/target/debug/netusb-client
+SRV=${NETUSB_BIN_DIR:-$ROOT/target/debug}/netusb-server
+CLI=${NETUSB_BIN_DIR:-$ROOT/target/debug}/netusb-client
 W=$(mktemp -d /tmp/netusb-ui.XXXXXX)
 SPORT=7660; UPORT=7661
 BASE=http://127.0.0.1:$UPORT

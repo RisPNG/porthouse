@@ -13,7 +13,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 pub mod usbip;
 
-pub const PROTO_VERSION: u16 = 3;
+pub const PROTO_VERSION: u16 = 4;
 pub const DEFAULT_PORT: u16 = 7600;
 pub const MDNS_SERVICE: &str = "_netusb._tcp.local.";
 
@@ -50,6 +50,9 @@ pub struct DeviceInfo {
     pub serial: Option<String>,
     /// Name of the client currently using the device, if any.
     pub in_use_by: Option<String>,
+    /// A mouse, keyboard or other human-interface device. The machine sharing it loses it while
+    /// it is attached elsewhere, so clients should warn before taking one.
+    pub input: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -205,6 +208,7 @@ mod tests {
             product: Some("DeathAdder Essential".into()),
             serial: None,
             in_use_by: None,
+            input: false,
         }
     }
 

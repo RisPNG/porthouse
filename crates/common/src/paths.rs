@@ -7,10 +7,20 @@ use std::path::PathBuf;
 
 /// State directory for the server.
 ///
-/// On Windows the server runs as SYSTEM but is administered by a person in another profile, so
-/// both must agree on one location: `%ProgramData%\netusb` (locked to administrators by the
-/// installer). Elsewhere it is the same as [`state_dir`].
+/// A server that runs as a system service (root on Unix, SYSTEM on Windows) is administered by a
+/// person in another account, so both must agree on one system-wide location: `/var/lib/netusb`
+/// and `%ProgramData%\netusb`. This deliberately ignores `SUDO_USER`: `sudo netusb-server pair` has
+/// to reach the very directory the service reads. A server run by an ordinary user keeps its state
+/// in that user's own directory, like the client.
 pub fn server_state_dir() -> std::io::Result<PathBuf> {
+    #[cfg(unix)]
+    if std::env::var_os("NETUSB_STATE_DIR").is_none() && is_root() {
+        let dir = PathBuf::from("/var/lib/netusb");
+        std::fs::create_dir_all(&dir)?;
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))?;
+        return Ok(dir);
+    }
     #[cfg(windows)]
     if std::env::var_os("NETUSB_STATE_DIR").is_none() {
         if let Some(pd) = std::env::var_os("ProgramData") {
@@ -48,10 +58,14 @@ pub fn state_dir() -> std::io::Result<PathBuf> {
 }
 
 #[cfg(unix)]
-fn platform_dir() -> Option<PathBuf> {
+fn is_root() -> bool {
     use std::os::unix::fs::MetadataExt;
-    let uid = std::fs::metadata("/proc/self").map(|m| m.uid()).unwrap_or(1);
-    if uid == 0 {
+    std::fs::metadata("/proc/self").map(|m| m.uid() == 0).unwrap_or(false)
+}
+
+#[cfg(unix)]
+fn platform_dir() -> Option<PathBuf> {
+    if is_root() {
         if let Some(home) = std::env::var("SUDO_USER").ok().and_then(|u| home_of(&u)) {
             return Some(home.join(".local/state/netusb"));
         }
@@ -65,7 +79,7 @@ fn platform_dir() -> Option<PathBuf> {
 
 /// Home directory of `user` from /etc/passwd (name:pw:uid:gid:gecos:home:shell).
 #[cfg(unix)]
-fn home_of(user: &str) -> Option<PathBuf> {
+pub(crate) fn home_of(user: &str) -> Option<PathBuf> {
     let passwd = std::fs::read_to_string("/etc/passwd").ok()?;
     passwd.lines().find_map(|l| {
         let f: Vec<&str> = l.split(':').collect();

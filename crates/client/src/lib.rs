@@ -58,6 +58,7 @@ impl Conn {
             .with_context(|| format!("timed out connecting to {addr}"))?
             .with_context(|| format!("connecting to {addr}"))?;
         tcp.set_nodelay(true)?;
+        let _ = netusb_common::net::enable_keepalive(&tcp);
         let sock = tokio::time::timeout(Duration::from_secs(10), ctx.connector.connect(server_name(), tcp))
             .await
             .context("TLS handshake timed out")?
@@ -444,7 +445,10 @@ pub fn print_listing(l: &Listing) {
             (None, Some(p)) => p.clone(),
             _ => "(unnamed device)".into(),
         };
-        let state = d.in_use_by.as_deref().map(|u| format!("  in use by {u}")).unwrap_or_default();
+        let mut state = d.in_use_by.as_deref().map(|u| format!("  in use by {u}")).unwrap_or_default();
+        if d.input {
+            state.push_str("  [mouse/keyboard: the server loses it while you use it]");
+        }
         println!(
             "   {:<8} {:04x}:{:04x}  {:?}  {}{}",
             d.busid, d.vendor_id, d.product_id, d.speed, name, state

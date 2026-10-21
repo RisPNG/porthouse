@@ -7,8 +7,8 @@
 
 set -u
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-SRV=$ROOT/target/debug/netusb-server
-CLI=$ROOT/target/debug/netusb-client
+SRV=${NETUSB_BIN_DIR:-$ROOT/target/debug}/netusb-server
+CLI=${NETUSB_BIN_DIR:-$ROOT/target/debug}/netusb-client
 W=$(mktemp -d /tmp/netusb-e2e.XXXXXX)
 PORT=7650; RELAY=7651
 PASS=0; FAIL=0

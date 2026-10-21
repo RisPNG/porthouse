@@ -64,13 +64,13 @@ jobs:
       - name: smoke test of the Windows programs
         shell: pwsh
         run: ./scripts/ci/windows-smoke.ps1
+      - name: assemble the release zip
+        shell: pwsh
+        run: ./scripts/package-windows.ps1
       - uses: actions/upload-artifact@v4
         with:
-          name: netusb-windows-x64-native
-          path: |
-            target/release/netusb-client.exe
-            target/release/netusb-server.exe
-            packaging/windows/*
+          name: netusb-windows-x64
+          path: dist/netusb-*-windows-x64.zip
 
   windows-attach:
     name: windows attach (real usbip-win2 driver, virtual mouse)
@@ -128,3 +128,42 @@ jobs:
       - name: engine test through a real WinUSB device
         shell: pwsh
         run: ./scripts/ci/windows-chain.ps1
+
+  linux-package:
+    name: linux release archive (static build, installed on real systemd)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: toolchain
+        run: |
+          rustup show
+          rustup target add x86_64-unknown-linux-musl
+          sudo apt-get update -y >/dev/null
+          sudo apt-get install -y musl-tools netcat-openbsd >/dev/null
+      - name: build the release archive
+        run: ./scripts/package-linux.sh
+      - name: the shipped binaries pass the security and web-interface suites
+        run: |
+          tar -xzf dist/netusb-*-linux-x86_64.tar.gz -C "$RUNNER_TEMP"
+          export NETUSB_BIN_DIR=$(echo "$RUNNER_TEMP"/netusb-*-linux-x86_64)
+          file "$NETUSB_BIN_DIR/netusb-server"
+          ./scripts/e2e-security.sh
+          ./scripts/e2e-ui.sh
+      - name: install, pair, use and uninstall exactly as the README says
+        run: sudo env "PATH=$PATH" ./scripts/ci/linux-install.sh dist/netusb-*-linux-x86_64.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: netusb-linux-x86_64
+          path: dist/netusb-*-linux-x86_64.tar.gz
+
+  linux-deadpeer:
+    name: linux dead-client detection (a vanished client releases its device)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: toolchain
+        run: rustup show
+      - name: build
+        run: cargo build
+      - name: black-hole the client and check the server lets go
+        run: sudo env "PATH=$PATH" ./scripts/ci/linux-deadpeer.sh
