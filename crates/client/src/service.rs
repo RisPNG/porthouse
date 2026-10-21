@@ -155,6 +155,8 @@ async fn handle(app: App, req: Request) -> Result<Value, String> {
             let p: PairParams = params(&req)?;
             let addr = clean_addr(&p.addr)?;
             let name = pair(&app.ctx, &addr, &p.pin).await.map_err(|e| format!("{e:#}"))?;
+            app.manual.lock().unwrap().insert(addr.clone());
+            app.save_manual();
             app.event(format!("paired with {name} ({addr})"));
             refresh(&app).await;
             Ok(json!({ "name": name }))
