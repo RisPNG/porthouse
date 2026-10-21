@@ -1,0 +1,26 @@
+[Unit]
+Description=netusb USB client and web interface
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Attaching devices needs root (it writes the kernel's vhci_hcd interface). The web interface
+# listens on 127.0.0.1 only; its sign-in URL is written to /var/lib/netusb/ui.url (root only).
+ExecStart=/usr/local/bin/netusb-client gui
+ExecStartPre=-/sbin/modprobe vhci-hcd
+KillSignal=SIGINT
+TimeoutStopSec=10
+Restart=on-failure
+RestartSec=2
+StateDirectory=netusb
+StateDirectoryMode=0700
+
+NoNewPrivileges=yes
+ProtectHome=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target

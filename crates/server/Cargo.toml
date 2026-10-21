@@ -1,0 +1,15 @@
+[package]
+name = "netusb-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow = "1.0.104"
+mdns-sd = "0.21.6"
+netusb-common = { version = "0.1.0", path = "../common" }
+netusb-proto = { version = "0.1.0", path = "../proto" }
+nusb = { version = "0.2.8", features = ["tokio"] }
+rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
+tokio = { version = "1.54.0", features = ["full"] }
+tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring", "tls12"] }

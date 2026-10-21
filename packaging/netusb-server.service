@@ -1,0 +1,29 @@
+[Unit]
+Description=netusb USB sharing server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/netusb-server run
+# SIGTERM makes the server hand every claimed device back to the host before it exits.
+KillSignal=SIGTERM
+TimeoutStopSec=15
+Restart=on-failure
+RestartSec=2
+# Identity, paired clients and the crash-recovery journal live here (/var/lib/netusb).
+StateDirectory=netusb
+StateDirectoryMode=0700
+
+# The server needs raw USB access and the network; it needs little else.
+NoNewPrivileges=yes
+ProtectHome=yes
+ProtectControlGroups=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+RestrictRealtime=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target
