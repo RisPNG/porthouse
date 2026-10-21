@@ -59,7 +59,7 @@ expect_fail "a second client cannot reuse the PIN" "pairing is not open" c2 pair
 
 echo "== lockout after repeated wrong PINs =="
 srv pair > /dev/null; GOOD=$(pin_of)
-for i in 1 2 3 4 5; do c2 pair 127.0.0.1:$PORT --pin 11111111 > /dev/null 2>&1; done
+for _ in 1 2 3 4 5; do c2 pair 127.0.0.1:$PORT --pin 11111111 > /dev/null 2>&1; done
 expect_fail "window closes after 5 wrong guesses (even the right PIN fails)" "pairing is not open" c2 pair 127.0.0.1:$PORT --pin "$GOOD"
 
 echo "== man in the middle =="

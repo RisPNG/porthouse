@@ -17,7 +17,7 @@ trap cleanup EXIT
 echo "== vhci_hcd"
 modprobe vhci-hcd 2>&1 || true
 if [ ! -d /sys/devices/platform/vhci_hcd.0 ]; then
-  echo "vhci_hcd is not available on this kernel ($(uname -r)); cannot test attach here"; ls /lib/modules/$(uname -r)/kernel/drivers/usb/usbip 2>&1 | head; exit 3
+  echo "vhci_hcd is not available on this kernel ($(uname -r)); cannot test attach here"; ls "/lib/modules/$(uname -r)/kernel/drivers/usb/usbip" 2>&1 | head; exit 3
 fi
 ok "vhci_hcd is loaded"
 

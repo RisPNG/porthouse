@@ -1,3 +1,4 @@
+# shellcheck shell=bash disable=SC2034
 # Helpers shared by the test scripts. Source it after setting ROOT.
 #
 # Every server and client service in a test lives in its own directory DIR: its state is DIR and

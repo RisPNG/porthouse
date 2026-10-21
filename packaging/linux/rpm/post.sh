@@ -1,3 +1,4 @@
+#!/bin/sh
 getent group netusb >/dev/null || groupadd --system netusb
 if [ -d /run/systemd/system ]; then
     systemctl daemon-reload || true

@@ -5,7 +5,6 @@
 set -u
 PKG=${1:?usage: linux-install.sh netusb.deb}
 PKG=$(readlink -f "$PKG")
-ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 USER_NAME=${SUDO_USER:?run with sudo from a normal account}
 PASS=0; FAIL=0
 ok()  { echo "  PASS  $1"; PASS=$((PASS+1)); }
