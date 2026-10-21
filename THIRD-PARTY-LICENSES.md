@@ -9,7 +9,7 @@ Porthouse's own code is under the [0BSD licence](LICENSE). The programs that you
 | usbip-win2 driver installer | Windows installer, installed only when you choose to use devices from other computers | BSD-2-Clause | [licenses/usbip-win2.txt](licenses/usbip-win2.txt) |
 | Microsoft Visual C++ runtime | Windows installer, next to the program | Microsoft redistributable terms for Visual Studio | |
 
-The Linux packages and the Flatpak use the Qt that comes with your system or with the KDE runtime, so they ship no Qt files of their own.
+The Linux packages use the Qt that comes with your system, so they ship no Qt files of their own.
 
 ## Qt
 

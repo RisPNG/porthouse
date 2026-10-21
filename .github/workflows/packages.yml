@@ -173,27 +173,3 @@ jobs:
         run: |
           pacman -U --noconfirm /home/builder/pkg/porthouse-*.pkg.tar.zst
           ./scripts/ci/package-verify.sh
-
-  flatpak:
-    name: build the Flatpak
-    runs-on: ubuntu-24.04
-    container:
-      image: ghcr.io/flathub-infra/flatpak-github-actions:kde-6.9
-      options: --privileged
-    steps:
-      - uses: actions/checkout@v4
-      - uses: flathub-infra/flatpak-github-actions/flatpak-builder@933e9e8ca36e85046ebca8e211f0785c6becac40
-        with:
-          bundle: porthouse.flatpak
-          manifest-path: packaging/flatpak/io.github.rispng.porthouse.yml
-          cache-key: flatpak-builder-${{ github.sha }}
-      - name: run it from the bundle
-        run: |
-          flatpak install --user --noninteractive --bundle porthouse.flatpak
-          mkdir -p /tmp/porthouse-shot
-          flatpak run --filesystem=/tmp/porthouse-shot --env=QT_QPA_PLATFORM=offscreen io.github.rispng.porthouse --screenshot /tmp/porthouse-shot/use.png
-          test -s /tmp/porthouse-shot/use.png
-      - uses: actions/upload-artifact@v4
-        with:
-          name: package-flatpak
-          path: porthouse.flatpak

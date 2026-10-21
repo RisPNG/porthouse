@@ -62,7 +62,6 @@ jobs:
       - name: checksums and notes
         run: |
           V=${GITHUB_REF_NAME#v}
-          mv assets/porthouse.flatpak "assets/porthouse-$V-x86_64.flatpak"
           (cd assets && sha256sum porthouse* > SHA256SUMS && cat SHA256SUMS)
           awk -v v="$V" '$0 ~ "^## " v " " {f=1; next} f && /^## / {exit} f' CHANGELOG.md > notes.md
           cat notes.md

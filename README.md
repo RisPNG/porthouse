@@ -27,7 +27,6 @@ Download the file for your system from the [Releases page](https://github.com/Ri
 | Ubuntu 24.04, Debian 12 or 13 | `porthouse-<system>-<version>-amd64.deb` | `sudo apt install ./porthouse-*.deb` |
 | Fedora 43 | `porthouse-fedora-43-<version>-x86_64.rpm` | `sudo dnf install ./porthouse-*.rpm` |
 | Arch Linux | `PKGBUILD` from [packaging/arch](packaging/arch) | `makepkg -si` in that folder, then `sudo systemctl enable --now porthouse-server porthouse-client` |
-| Any Linux, program only | `porthouse-<version>-x86_64.flatpak` | `flatpak install porthouse-*.flatpak` (install one of the packages above as well, because the Flatpak is only the window) |
 
 Both Linux and Windows installs start everything for you and add Porthouse to your applications. The Windows installer asks what you want to do on that PC and installs the USB/IP driver it needs when you want to use devices from other computers. See [how to check your download](docs/verifying-downloads.md) if you like to verify what you run. Windows shows a SmartScreen warning for installers that are not signed.
 

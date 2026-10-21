@@ -13,7 +13,7 @@ cargo build --release          # target/release/porthouse-server, porthouse-clie
 cargo test --workspace
 ```
 
-Layout: `crates/proto` (wire formats), `crates/common` (identity, trust, TLS, paths, Windows service support), `crates/ipc` (control channel), `crates/server`, `crates/client` (library, service, and command line), `gui/` (the Qt program), `packaging/` (Linux, Arch, Flatpak, and Windows packaging), `scripts/` (test suites and packaging), `docs/`.
+Layout: `crates/proto` (wire formats), `crates/common` (identity, trust, TLS, paths, Windows service support), `crates/ipc` (control channel), `crates/server`, `crates/client` (library, service, and command line), `gui/` (the Qt program), `packaging/` (Linux, Arch, and Windows packaging), `scripts/` (test suites and packaging), `docs/`.
 
 ### The program
 
@@ -51,9 +51,6 @@ cmake --build build && (cd build && cpack -G DEB)     # or -G RPM with -DPORTHOU
 
 # Arch
 (cd packaging/arch && makepkg -si)
-
-# Flatpak
-flatpak-builder --user --install --force-clean build-flatpak packaging/flatpak/io.github.rispng.porthouse.yml
 
 # Windows installer, after building the Rust programs and the program, with Inno Setup installed
 ./scripts/package-windows.ps1 -GuiBuild build\gui
@@ -116,7 +113,7 @@ A shared device always returns to its owner: when the client releases it, when t
 
 ### Packaging
 
-Linux packages come from one CMake project (`CMakeLists.txt`) that installs the three Rust programs (static musl builds), the Qt program from `gui/`, the systemd units, the module list that loads `vhci_hcd`, the autostart entry, and the licences. CPack builds the .deb and .rpm inside a container of each target system, so the library dependencies come from that system. The Arch recipe and the Flatpak manifest are in `packaging/`. The Windows installer is built by Inno Setup (`packaging/windows/porthouse.iss`) from the Rust programs, the Qt program with its runtime from `windeployqt`, and the pinned usbip-win2 installer.
+Linux packages come from one CMake project (`CMakeLists.txt`) that installs the three Rust programs (static musl builds), the Qt program from `gui/`, the systemd units, the module list that loads `vhci_hcd`, the autostart entry, and the licences. CPack builds the .deb and .rpm inside a container of each target system, so the library dependencies come from that system. The Arch recipe is in `packaging/`. The Windows installer is built by Inno Setup (`packaging/windows/porthouse.iss`) from the Rust programs, the Qt program with its runtime from `windeployqt`, and the pinned usbip-win2 installer.
 
 ### Testing
 
@@ -130,7 +127,7 @@ Everything below runs in continuous integration on GitHub-hosted machines, and m
 | ci: linux dead-client | a client whose network vanishes releases its device within a minute |
 | packages: build and install | each Debian, Ubuntu, and Fedora package is built in its own container, installed on a clean system, draws every tab of the program, and passes the attack suite |
 | packages: systemd | the Ubuntu package on a real systemd machine: services start, a group member pairs and attaches the virtual mouse through the hardened service, the program draws against the live services, removal and purge clean up |
-| packages: Arch and Flatpak | the Arch recipe builds and installs, and the Flatpak builds and runs |
+| packages: Arch | the Arch recipe builds and installs |
 | windows: programs | the Windows programs run, pair, refuse unpaired clients, and list devices |
 | windows: attach | the real usbip-win2 driver attaches a virtual mouse, Windows enumerates a HID mouse, and the pointer moves (and stays still before attach and after release) |
 | windows: engine | Windows binds `winusb.sys` to a virtual device by itself (from Microsoft OS descriptors) and the native Windows server shares it through the same checks |
@@ -183,10 +180,10 @@ To set it up once:
 
 ```bash
 gpg --quick-generate-key "Porthouse releases <hello@rispeng.com>" ed25519 sign 3y
-gpg --list-secret-keys --keyid-format long          # note the key id
-gpg --armor --export KEYID > porthouse-signing.asc  # commit this file to the repository root
-gpg --armor --export-secret-keys KEYID | gh secret set GPG_PRIVATE_KEY
-gh secret set GPG_PASSPHRASE
+KEY=$(gpg --list-secret-keys --with-colons "Porthouse releases" | awk -F: '/^fpr/{print $10; exit}')
+gpg --armor --export "$KEY" > porthouse-signing.asc  # commit this file to the repository root
+gpg --armor --export-secret-keys "$KEY" | gh secret set GPG_PRIVATE_KEY --repo RisPNG/porthouse
+gh secret set GPG_PASSPHRASE --repo RisPNG/porthouse   # the key's passphrase, or skip this when the key has none
 ```
 
 Keep a backup of the private key somewhere safe and offline. Anyone can then check a download with `gpg --import porthouse-signing.asc` and `gpg --verify FILE.asc FILE`.

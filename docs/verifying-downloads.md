@@ -15,10 +15,11 @@ Releases made with a signing key also have a `.asc` file next to every download 
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/RisPNG/porthouse/main/porthouse-signing.asc
 gpg --import porthouse-signing.asc
+gpg --fingerprint "Porthouse releases"
 gpg --verify porthouse-fedora-43-0.3.0-x86_64.rpm.asc porthouse-fedora-43-0.3.0-x86_64.rpm
 ```
 
-If a release has no `.asc` files, it was published before the signing key existed.
+The fingerprint printed by the second command has to be `684F E28C 3AFC FB7B 6F7E  4832 DF0E D7F4 9D1D 70F6`. If a release has no `.asc` files, it was published before the signing key existed.
 
 ## The Windows installer
 
