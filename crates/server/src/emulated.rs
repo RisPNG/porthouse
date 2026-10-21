@@ -52,14 +52,23 @@ const REPORT_DESCRIPTOR: [u8; 52] = [
 
 fn device_descriptor() -> Vec<u8> {
     vec![
-        18, 1, 0x00, 0x02, // bcdUSB 2.00
-        0, 0, 0, 64, // class/subclass/protocol in the interface; ep0 max packet 64
+        18,
+        1,
+        0x00,
+        0x02, // bcdUSB 2.00
+        0,
+        0,
+        0,
+        64, // class/subclass/protocol in the interface; ep0 max packet 64
         (VENDOR_ID & 0xff) as u8,
         (VENDOR_ID >> 8) as u8,
         (PRODUCT_ID & 0xff) as u8,
         (PRODUCT_ID >> 8) as u8,
-        0x00, 0x01, // bcdDevice 1.00
-        1, 2, 3, // manufacturer, product, serial string indexes
+        0x00,
+        0x01, // bcdDevice 1.00
+        1,
+        2,
+        3, // manufacturer, product, serial string indexes
         1, // one configuration
     ]
 }
@@ -128,12 +137,12 @@ fn control(setup: [u8; 8]) -> Control {
             _ => Control::Stall,
         },
         (0x80, 0x00) | (0x81, 0x00) | (0x82, 0x00) => Control::Data(vec![0, 0]), // GET_STATUS
-        (0x00, 0x09) | (0x01, 0x0b) | (0x00, 0x05) => ok(),                       // set configuration / interface / address
-        (0x02, 0x01) | (0x02, 0x03) => ok(),                                      // clear/set endpoint feature
-        (0x21, 0x0a) | (0x21, 0x0b) | (0x21, 0x09) => ok(),                       // HID set idle / protocol / report
-        (0xa1, 0x03) => Control::Data(vec![1]),                                   // GET_PROTOCOL: report protocol
-        (0xa1, 0x02) => Control::Data(vec![0]),                                   // GET_IDLE
-        (0xa1, 0x01) => Control::Data(vec![0; 4]),                                // GET_REPORT: no movement
+        (0x00, 0x09) | (0x01, 0x0b) | (0x00, 0x05) => ok(),                      // set configuration / interface / address
+        (0x02, 0x01) | (0x02, 0x03) => ok(),                                     // clear/set endpoint feature
+        (0x21, 0x0a) | (0x21, 0x0b) | (0x21, 0x09) => ok(),                      // HID set idle / protocol / report
+        (0xa1, 0x03) => Control::Data(vec![1]),                                  // GET_PROTOCOL: report protocol
+        (0xa1, 0x02) => Control::Data(vec![0]),                                  // GET_IDLE
+        (0xa1, 0x01) => Control::Data(vec![0; 4]),                               // GET_REPORT: no movement
         _ => Control::Stall,
     }
 }
@@ -208,7 +217,13 @@ async fn read_loop<R: AsyncRead + Unpin>(
                 };
                 let _ = out.send(Reply::Unlink { seq: basic.seqnum, status }).await;
             }
-            Urb::Submit { basic, buffer_len, number_of_packets, setup, .. } => {
+            Urb::Submit {
+                basic,
+                buffer_len,
+                number_of_packets,
+                setup,
+                ..
+            } => {
                 let seq = basic.seqnum;
                 let dir_in = basic.direction == DIR_IN;
                 let len = buffer_len as usize;
@@ -222,17 +237,39 @@ async fn read_loop<R: AsyncRead + Unpin>(
                 if usbip::is_isochronous(number_of_packets) {
                     let mut skip = vec![0u8; (number_of_packets as usize).min(MAX_URB_DATA / ISO_DESC_LEN) * ISO_DESC_LEN];
                     rd.read_exact(&mut skip).await?;
-                    let _ = out.send(Reply::Submit { seq, status: usbip::ENOSYS, data: Vec::new(), actual: 0 }).await;
+                    let _ = out
+                        .send(Reply::Submit {
+                            seq,
+                            status: usbip::ENOSYS,
+                            data: Vec::new(),
+                            actual: 0,
+                        })
+                        .await;
                     continue;
                 }
                 if basic.ep == 0 {
                     let reply = match control(setup) {
                         Control::Data(mut d) if dir_in => {
                             d.truncate(len);
-                            Reply::Submit { seq, status: 0, actual: d.len() as u32, data: d }
+                            Reply::Submit {
+                                seq,
+                                status: 0,
+                                actual: d.len() as u32,
+                                data: d,
+                            }
                         }
-                        Control::Data(_) => Reply::Submit { seq, status: 0, actual: len as u32, data: Vec::new() },
-                        Control::Stall => Reply::Submit { seq, status: usbip::EPIPE, actual: 0, data: Vec::new() },
+                        Control::Data(_) => Reply::Submit {
+                            seq,
+                            status: 0,
+                            actual: len as u32,
+                            data: Vec::new(),
+                        },
+                        Control::Stall => Reply::Submit {
+                            seq,
+                            status: usbip::EPIPE,
+                            actual: 0,
+                            data: Vec::new(),
+                        },
                     };
                     let _ = out.send(reply).await;
                 } else if basic.ep == 1 && dir_in {
@@ -245,11 +282,25 @@ async fn read_loop<R: AsyncRead + Unpin>(
                         }
                         let mut r = report(counter2.fetch_add(1, Ordering::Relaxed)).to_vec();
                         r.truncate(len.max(0));
-                        let _ = out2.send(Reply::Submit { seq, status: 0, actual: r.len() as u32, data: r }).await;
+                        let _ = out2
+                            .send(Reply::Submit {
+                                seq,
+                                status: 0,
+                                actual: r.len() as u32,
+                                data: r,
+                            })
+                            .await;
                     });
                     pending.lock().unwrap().insert(seq, task.abort_handle());
                 } else {
-                    let _ = out.send(Reply::Submit { seq, status: usbip::EPIPE, data: Vec::new(), actual: 0 }).await;
+                    let _ = out
+                        .send(Reply::Submit {
+                            seq,
+                            status: usbip::EPIPE,
+                            data: Vec::new(),
+                            actual: 0,
+                        })
+                        .await;
                 }
             }
         }
@@ -275,20 +326,32 @@ mod tests {
             let (a, b) = duplex(64 * 1024);
             let (tx, rx) = watch::channel(false);
             let task = tokio::spawn(run(b, rx));
-            Driver { s: a, seq: 0, _stop: tx, task }
+            Driver {
+                s: a,
+                seq: 0,
+                _stop: tx,
+                task,
+            }
         }
 
         async fn send_control(&mut self, setup: [u8; 8], len: u32) -> u32 {
             self.seq += 1;
             let dir = if setup[0] & 0x80 != 0 { DIR_IN } else { DIR_OUT };
-            self.s.write_all(&cmd_submit(self.seq, 0x0063_0001, dir, 0, len, setup)).await.unwrap();
+            self.s
+                .write_all(&cmd_submit(self.seq, 0x0063_0001, dir, 0, len, setup))
+                .await
+                .unwrap();
             self.seq
         }
 
         async fn read_ret(&mut self) -> (u32, i32, Vec<u8>) {
             let mut h = [0u8; 48];
             self.s.read_exact(&mut h).await.unwrap();
-            assert_eq!(u32::from_be_bytes(h[0..4].try_into().unwrap()), usbip::RET_SUBMIT, "must be RET_SUBMIT");
+            assert_eq!(
+                u32::from_be_bytes(h[0..4].try_into().unwrap()),
+                usbip::RET_SUBMIT,
+                "must be RET_SUBMIT"
+            );
             let seq = u32::from_be_bytes(h[4..8].try_into().unwrap());
             let status = i32::from_be_bytes(h[20..24].try_into().unwrap());
             let actual = u32::from_be_bytes(h[24..28].try_into().unwrap()) as usize;
@@ -314,7 +377,11 @@ mod tests {
         let cfg = configuration_descriptor();
         assert_eq!(u16::from_le_bytes([cfg[2], cfg[3]]) as usize, cfg.len(), "wTotalLength");
         let hid = hid_descriptor();
-        assert_eq!(hid[7] as usize, REPORT_DESCRIPTOR.len(), "HID descriptor announces the report descriptor length");
+        assert_eq!(
+            hid[7] as usize,
+            REPORT_DESCRIPTOR.len(),
+            "HID descriptor announces the report descriptor length"
+        );
         assert_eq!(&cfg[18..27], &hid[..], "HID descriptor sits after the interface descriptor");
         assert_eq!(device_descriptor().len(), 18);
         assert_eq!(string_descriptor(2).unwrap()[0] as usize, 2 + "netusb virtual mouse".len() * 2);
@@ -343,7 +410,10 @@ mod tests {
         let (_, cfg) = d.control(get_descriptor(0x80, 2, 0, 255), 255).await;
         assert_eq!(cfg.len(), 34);
         let (_, name) = d.control(get_descriptor(0x80, 3, 2, 255), 255).await;
-        assert_eq!(String::from_utf16(&name[2..].chunks(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect::<Vec<_>>()).unwrap(), "netusb virtual mouse");
+        assert_eq!(
+            String::from_utf16(&name[2..].chunks(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect::<Vec<_>>()).unwrap(),
+            "netusb virtual mouse"
+        );
         let (st, rep) = d.control(get_descriptor(0x81, 0x22, 0, 4096), 4096).await;
         assert_eq!((st, rep.len()), (0, 52));
     }
@@ -351,15 +421,31 @@ mod tests {
     #[tokio::test]
     async fn requests_a_full_speed_device_cannot_answer_stall() {
         let mut d = Driver::new();
-        assert_eq!(d.control(get_descriptor(0x80, 6, 0, 10), 10).await.0, usbip::EPIPE, "device qualifier");
-        assert_eq!(d.control([0xc0, 0x77, 0, 0, 0, 0, 4, 0], 4).await.0, usbip::EPIPE, "unknown vendor request");
-        assert_eq!(d.control(get_descriptor(0x80, 3, 9, 255), 255).await.0, usbip::EPIPE, "missing string");
+        assert_eq!(
+            d.control(get_descriptor(0x80, 6, 0, 10), 10).await.0,
+            usbip::EPIPE,
+            "device qualifier"
+        );
+        assert_eq!(
+            d.control([0xc0, 0x77, 0, 0, 0, 0, 4, 0], 4).await.0,
+            usbip::EPIPE,
+            "unknown vendor request"
+        );
+        assert_eq!(
+            d.control(get_descriptor(0x80, 3, 9, 255), 255).await.0,
+            usbip::EPIPE,
+            "missing string"
+        );
     }
 
     #[tokio::test]
     async fn configuration_and_hid_setup_requests_succeed() {
         let mut d = Driver::new();
-        for setup in [[0x00, 9, 1, 0, 0, 0, 0, 0], [0x21, 0x0a, 0, 0, 0, 0, 0, 0], [0x21, 0x0b, 0, 0, 0, 0, 0, 0]] {
+        for setup in [
+            [0x00, 9, 1, 0, 0, 0, 0, 0],
+            [0x21, 0x0a, 0, 0, 0, 0, 0, 0],
+            [0x21, 0x0b, 0, 0, 0, 0, 0, 0],
+        ] {
             assert_eq!(d.control(setup, 0).await.0, 0, "{setup:02x?}");
         }
         assert_eq!(d.control([0xa1, 3, 0, 0, 0, 0, 1, 0], 1).await, (0, vec![1]));
@@ -380,7 +466,10 @@ mod tests {
             sum.1 += data[2] as i8 as i32;
         }
         assert_eq!(sum, (60, 0), "20 reports of +3 on X");
-        assert!(t0.elapsed() >= Duration::from_millis(150), "reports are paced like a real device, not instantaneous");
+        assert!(
+            t0.elapsed() >= Duration::from_millis(150),
+            "reports are paced like a real device, not instantaneous"
+        );
     }
 
     #[tokio::test]
@@ -394,7 +483,11 @@ mod tests {
         let mut h = [0u8; 48];
         d.s.read_exact(&mut h).await.unwrap();
         assert_eq!(u32::from_be_bytes(h[0..4].try_into().unwrap()), usbip::RET_UNLINK);
-        assert_eq!(u32::from_be_bytes(h[4..8].try_into().unwrap()), d.seq, "reply echoes the unlink's own sequence number");
+        assert_eq!(
+            u32::from_be_bytes(h[4..8].try_into().unwrap()),
+            d.seq,
+            "reply echoes the unlink's own sequence number"
+        );
         assert_eq!(i32::from_be_bytes(h[20..24].try_into().unwrap()), usbip::ECONNRESET);
         // The cancelled URB never answers, so the next thing on the wire is the next URB's reply.
         let seq = d.send_control(get_descriptor(0x80, 1, 0, 18), 18).await;
@@ -432,7 +525,10 @@ mod tests {
         let d = Driver::new();
         let Driver { s, task, _stop, .. } = d;
         drop(s);
-        let r = tokio::time::timeout(Duration::from_secs(2), task).await.expect("did not end").unwrap();
+        let r = tokio::time::timeout(Duration::from_secs(2), task)
+            .await
+            .expect("did not end")
+            .unwrap();
         assert!(r.is_ok());
     }
 }

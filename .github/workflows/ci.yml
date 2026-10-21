@@ -1,0 +1,86 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: never
+  RUSTFLAGS: ""
+
+jobs:
+  linux:
+    name: linux build, lint, tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: toolchain
+        run: rustup show && rustup component add clippy rustfmt
+      - name: format
+        run: cargo fmt --check
+      - name: clippy
+        run: cargo clippy --all-targets -- -D warnings
+      - name: tests
+        run: cargo test --workspace
+      - name: security end-to-end (pairing, authorization, man-in-the-middle)
+        run: |
+          cargo build
+          sudo apt-get install -y netcat-openbsd >/dev/null
+          ./scripts/e2e-security.sh
+      - name: web interface end-to-end
+        run: ./scripts/e2e-ui.sh
+
+  linux-attach:
+    name: linux attach (real vhci_hcd, virtual mouse)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: toolchain
+        run: rustup show
+      - name: build
+        run: cargo build
+      - name: kernel modules
+        run: |
+          uname -r
+          sudo apt-get update -y >/dev/null
+          sudo apt-get install -y "linux-modules-extra-$(uname -r)" usbutils || true
+          sudo modprobe vhci-hcd || true
+          ls /sys/devices/platform | grep -i vhci || echo "no vhci_hcd platform device"
+      - name: attach and move the pointer
+        run: sudo env "PATH=$PATH" ./scripts/ci/linux-attach.sh
+
+  windows:
+    name: windows build, tests, smoke
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: toolchain
+        run: rustup show
+      - name: tests
+        run: cargo test --workspace
+      - name: build release
+        run: cargo build --release
+      - name: smoke test of the Windows programs
+        shell: pwsh
+        run: ./scripts/ci/windows-smoke.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: netusb-windows-x64-native
+          path: |
+            target/release/netusb-client.exe
+            target/release/netusb-server.exe
+            packaging/windows/*
+
+  windows-attach:
+    name: windows attach (real usbip-win2 driver, virtual mouse)
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: toolchain
+        run: rustup show
+      - name: build release
+        run: cargo build --release
+      - name: install driver, attach, move the pointer
+        shell: pwsh
+        run: ./scripts/ci/windows-attach.ps1

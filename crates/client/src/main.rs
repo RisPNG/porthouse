@@ -8,7 +8,7 @@ fn usage() {
     println!(
         "netusb-client list [--host HOST[:PORT]]... [--wait SECONDS]   find servers and show their devices
 netusb-client pair HOST[:PORT] [--pin PIN]                     trust a server (PIN from `netusb-server pair`)
-netusb-client use HOST[:PORT] BUSID [--importer PATH]          attach a device (Linux: needs root; Windows: needs usbip-win2)
+netusb-client use HOST[:PORT] BUSID [--importer PATH] [--seconds N]   attach a device (Linux: needs root; Windows: needs usbip-win2)
 netusb-client servers                                          list paired servers
 netusb-client forget FINGERPRINT                               stop trusting a server
 netusb-client ports                                            show virtual USB ports (Linux)
@@ -38,13 +38,15 @@ async fn main() -> Result<()> {
             let host = args.next().context("usage: netusb-client use HOST[:PORT] BUSID")?;
             let busid = args.next().context("usage: netusb-client use HOST[:PORT] BUSID")?;
             let mut importer = None;
+            let mut seconds = None;
             while let Some(a) = args.next() {
                 match a.as_str() {
+                    "--seconds" => seconds = Some(args.next().context("--seconds needs a value")?.parse()?),
                     "--importer" => importer = Some(std::path::PathBuf::from(args.next().context("--importer needs a path")?)),
                     other => bail!("unknown argument {other:?}"),
                 }
             }
-            return cmd_use(&ctx, &with_default_port(host), &busid, importer).await;
+            return cmd_use(&ctx, &with_default_port(host), &busid, importer, seconds).await;
         }
         Some("servers") => {
             let all = ctx.known.entries();

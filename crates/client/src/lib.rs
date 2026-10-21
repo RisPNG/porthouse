@@ -398,7 +398,7 @@ pub fn cmd_open() -> Result<()> {
 }
 
 /// CLI wrapper: attach and hold until Ctrl-C / SIGTERM.
-pub async fn cmd_use(ctx: &Ctx, addr: &str, busid: &str, importer: Option<std::path::PathBuf>) -> Result<()> {
+pub async fn cmd_use(ctx: &Ctx, addr: &str, busid: &str, importer: Option<std::path::PathBuf>, seconds: Option<u64>) -> Result<()> {
     let est = match importer {
         Some(exe) => establish_with_tool(ctx, addr, busid, exe).await?,
         None => establish(ctx, addr, busid).await?,
@@ -409,14 +409,24 @@ pub async fn cmd_use(ctx: &Ctx, addr: &str, busid: &str, importer: Option<std::p
     );
     #[cfg(unix)]
     let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+    let limit = async {
+        match seconds {
+            Some(s) => tokio::time::sleep(std::time::Duration::from_secs(s)).await,
+            None => std::future::pending::<()>().await,
+        }
+    };
     let stop = async {
         #[cfg(unix)]
         tokio::select! {
             _ = tokio::signal::ctrl_c() => {}
             _ = term.recv() => {}
+            _ = limit => {}
         }
         #[cfg(not(unix))]
-        let _ = tokio::signal::ctrl_c().await;
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {}
+            _ = limit => {}
+        }
     };
     let why = est.relay(stop).await;
     eprintln!("{why}");

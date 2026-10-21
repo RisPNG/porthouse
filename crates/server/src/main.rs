@@ -277,7 +277,11 @@ where
                 ClientMsg::Ping(n) => send(&mut sock, &ServerMsg::Pong(n)).await?,
                 ClientMsg::Attach { busid } => {
                     let is_virtual = srv.test_device && busid == emulated::BUSID;
-                    let found = if is_virtual { None } else { raw_devices()?.into_iter().find(|d| busid_of(d) == busid) };
+                    let found = if is_virtual {
+                        None
+                    } else {
+                        raw_devices()?.into_iter().find(|d| busid_of(d) == busid)
+                    };
                     if found.is_none() && !is_virtual {
                         send(&mut sock, &err(4, format!("no such device {busid}"))).await?;
                         continue;
