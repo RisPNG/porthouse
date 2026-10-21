@@ -323,11 +323,23 @@ where
                         (None, Some(kind)) => kind.attach_info(),
                         (None, None) => unreachable!("a device was found or a virtual kind matched above"),
                     };
+                    // Take the device first: if that fails, say so now instead of reporting success.
+                    let prepared = match found {
+                        Some(dev) => match engine::prepare(dev, busid.clone()).await {
+                            Ok(p) => Some(p),
+                            Err(e) => {
+                                eprintln!("cannot attach {busid} for {client_name:?}: {e:#}");
+                                send(&mut sock, &err(11, format!("{e:#}"))).await?;
+                                continue;
+                            }
+                        },
+                        None => None,
+                    };
                     send(&mut sock, &ServerMsg::Attached(info)).await?;
                     eprintln!("{client_name:?} attached {busid}");
                     // From here the (encrypted) connection carries raw USB/IP URBs until the client leaves.
-                    let result = match (found, virtual_kind) {
-                        (Some(dev), _) => engine::run(dev, busid.clone(), sock, srv.shutdown.clone()).await,
+                    let result = match (prepared, virtual_kind) {
+                        (Some(p), _) => engine::serve(p, sock, srv.shutdown.clone()).await,
                         (None, Some(kind)) => emulated::run(kind, sock, srv.shutdown.clone()).await,
                         (None, None) => unreachable!("a device was found or a virtual kind matched above"),
                     };

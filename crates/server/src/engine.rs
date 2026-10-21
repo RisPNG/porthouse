@@ -17,7 +17,7 @@ use std::sync::{Arc, Mutex};
 use std::task::Poll;
 use std::time::Duration;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use netusb_proto::usbip::{self, Urb, DIR_IN, ISO_DESC_LEN, MAX_URB_DATA};
 use nusb::descriptors::TransferType;
 use nusb::transfer::{
@@ -439,33 +439,81 @@ pub async fn restore_stale(busid_of: impl Fn(&nusb::DeviceInfo) -> String) {
     let _ = std::fs::remove_file(journal_path());
 }
 
-/// Serve one attachment until the client goes away or `shutdown` fires. Gives the device back to
-/// the host on exit.
-pub async fn run<S>(info: nusb::DeviceInfo, busid: String, stream: S, mut shutdown: watch::Receiver<bool>) -> Result<()>
-where
-    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
-{
-    let device = info
-        .open()
-        .await
-        .context("opening the USB device (are you root, or is it permitted by udev?)")?;
+/// Why a device could not be opened, with what to do about it on this operating system.
+fn open_failure(e: &impl std::fmt::Display) -> anyhow::Error {
+    if cfg!(windows) {
+        anyhow!(
+            "cannot open the device ({e}). On Windows a device can only be shared if it uses the WinUSB driver; \
+             bind WinUSB to it first (for example with Zadig; note that this replaces the driver Windows normally uses for it)"
+        )
+    } else {
+        anyhow!("cannot open the device ({e}). Run the server as root, or allow access to the device with a udev rule")
+    }
+}
+
+/// A device that is open, claimed from the host and ready to serve. Created before the client is
+/// told the attach succeeded, so that a device that cannot be taken is refused with a clear error
+/// instead of being reported as attached and then silently dropped.
+pub struct Prepared {
+    device: Device,
+    numbers: Vec<u8>,
+    busid: String,
+    session: Arc<Session>,
+    out_tx: mpsc::Sender<Reply>,
+    out_rx: mpsc::Receiver<Reply>,
+    inflight: Inflight,
+}
+
+/// Open the device, take its interfaces away from the host driver and start its endpoint workers.
+/// On failure everything done so far is undone and the host driver is given back.
+pub async fn prepare(info: nusb::DeviceInfo, busid: String) -> Result<Prepared> {
+    let device = info.open().await.map_err(|e| open_failure(&e))?;
     let numbers: Vec<u8> = {
-        let config = device.active_configuration().map_err(|e| anyhow!("no active configuration: {e}"))?;
+        let config = device
+            .active_configuration()
+            .map_err(|e| anyhow!("the device has no active configuration ({e})"))?;
         config.interfaces().map(|i| i.interface_number()).collect()
     };
 
     // Journal before detaching so a crash between here and teardown is recoverable.
     journal_add(&busid, &numbers);
+    match claim_all(&device, &numbers).await {
+        Ok((session, out_tx, out_rx, inflight)) => Ok(Prepared {
+            device,
+            numbers,
+            busid,
+            session,
+            out_tx,
+            out_rx,
+            inflight,
+        }),
+        Err(e) => {
+            for n in &numbers {
+                let _ = device.attach_kernel_driver(*n);
+            }
+            journal_remove(&busid);
+            Err(e)
+        }
+    }
+}
+
+type Claimed = (Arc<Session>, mpsc::Sender<Reply>, mpsc::Receiver<Reply>, Inflight);
+
+async fn claim_all(device: &Device, numbers: &[u8]) -> Result<Claimed> {
     let mut interfaces = Vec::new();
-    for n in &numbers {
-        let iface = device
-            .detach_and_claim_interface(*n)
-            .await
-            .with_context(|| format!("claiming interface {n}"))?;
+    for n in numbers {
+        let iface = device.detach_and_claim_interface(*n).await.map_err(|e| {
+            let hint = if cfg!(windows) {
+                "; composite devices (several interfaces) are not supported on Windows yet"
+            } else {
+                ""
+            };
+            anyhow!("cannot claim interface {n} of the device ({e}){hint}")
+        })?;
         interfaces.push(iface);
     }
 
-    let (out_tx, mut out_rx) = mpsc::channel::<Reply>(256);
+    let (out_tx, out_rx) = mpsc::channel::<Reply>(256);
     let inflight: Inflight = Arc::default();
     let session = Arc::new(Session {
         device: device.clone(),
@@ -478,7 +526,24 @@ where
     for iface in &session.interfaces {
         session.open_endpoints(iface)?;
     }
+    Ok((session, out_tx, out_rx, inflight))
+}
 
+/// Serve one prepared attachment until the client goes away or `shutdown` fires. Gives the device
+/// back to the host on exit.
+pub async fn serve<S>(prepared: Prepared, stream: S, mut shutdown: watch::Receiver<bool>) -> Result<()>
+where
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
+    let Prepared {
+        device,
+        numbers,
+        busid,
+        session,
+        out_tx,
+        mut out_rx,
+        inflight,
+    } = prepared;
     let (mut rd, mut wr) = tokio::io::split(stream);
 
     let writer_inflight = inflight.clone();
