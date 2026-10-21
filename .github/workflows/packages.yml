@@ -145,3 +145,54 @@ jobs:
           sudo modprobe vhci-hcd || true
       - name: install, pair, attach, use the program, remove
         run: sudo ./scripts/ci/linux-install.sh packages/*.deb
+
+  arch:
+    name: build and install on Arch Linux
+    runs-on: ubuntu-24.04
+    container: archlinux:base-devel
+    steps:
+      - name: tools
+        run: |
+          pacman -Syu --noconfirm git cargo cmake ninja qt6-base qt6-declarative kmod \
+            openbsd-netcat openssl vim python
+          useradd -m builder
+      - uses: actions/checkout@v4
+      - name: build the package from the recipe, with the source taken from this checkout
+        run: |
+          VERSION=$(sed -n 's/^pkgver=//p' packaging/arch/PKGBUILD)
+          git config --global --add safe.directory "$PWD"
+          mkdir -p /home/builder/pkg
+          git archive --prefix="netusb-$VERSION/" -o "/home/builder/pkg/netusb-$VERSION.tar.gz" HEAD
+          cp packaging/arch/netusb.install /home/builder/pkg/
+          sed 's|^source=.*|source=("netusb-$pkgver.tar.gz")|' packaging/arch/PKGBUILD > /home/builder/pkg/PKGBUILD
+          chown -R builder /home/builder/pkg
+          su builder -c 'cd /home/builder/pkg && makepkg --noconfirm --nodeps'
+          ls -l /home/builder/pkg/*.pkg.tar.zst
+      - name: install it and run the checks
+        run: |
+          pacman -U --noconfirm /home/builder/pkg/netusb-*.pkg.tar.zst
+          ./scripts/ci/package-verify.sh
+
+  flatpak:
+    name: build the Flatpak
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:kde-6.9
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+      - uses: flathub-infra/flatpak-github-actions/flatpak-builder@933e9e8ca36e85046ebca8e211f0785c6becac40
+        with:
+          bundle: netusb.flatpak
+          manifest-path: packaging/flatpak/io.github.rispng.netusb.yml
+          cache-key: flatpak-builder-${{ github.sha }}
+      - name: run it from the bundle
+        run: |
+          flatpak install --user --noninteractive --bundle netusb.flatpak
+          mkdir -p /tmp/netusb-shot
+          flatpak run --filesystem=/tmp/netusb-shot --env=QT_QPA_PLATFORM=offscreen io.github.rispng.netusb --screenshot /tmp/netusb-shot/use.png
+          test -s /tmp/netusb-shot/use.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-flatpak
+          path: netusb.flatpak

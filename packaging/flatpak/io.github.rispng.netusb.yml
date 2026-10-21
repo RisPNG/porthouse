@@ -1,0 +1,29 @@
+app-id: io.github.rispng.netusb
+runtime: org.kde.Platform
+runtime-version: '6.9'
+sdk: org.kde.Sdk
+command: netusb
+
+# Only the program is sandboxed. The services run on the host (install the netusb package) and
+# the program reaches them through their sockets in /run/netusb.
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  - --filesystem=/run/netusb
+  - --talk-name=org.kde.StatusNotifierWatcher
+
+modules:
+  - name: netusb
+    buildsystem: cmake-ninja
+    subdir: gui
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+    sources:
+      - type: dir
+        path: ../..
+    post-install:
+      - mv /app/share/applications/netusb.desktop /app/share/applications/io.github.rispng.netusb.desktop
+      - mv /app/share/icons/hicolor/scalable/apps/netusb.svg /app/share/icons/hicolor/scalable/apps/io.github.rispng.netusb.svg
+      - sed -i 's/^Icon=netusb/Icon=io.github.rispng.netusb/' /app/share/applications/io.github.rispng.netusb.desktop
