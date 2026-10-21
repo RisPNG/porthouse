@@ -153,9 +153,12 @@ impl Client {
             params,
         })?;
         out.push(b'\n');
-        self.writer.write_all(&out).await?;
+        let written = self.writer.write_all(&out).await;
         let mut line = String::new();
-        if self.reader.read_line(&mut line).await? == 0 {
+        let read = self.reader.read_line(&mut line).await;
+        if line.is_empty() {
+            written?;
+            read?;
             bail!("the service closed the connection");
         }
         let reply: Reply = serde_json::from_str(&line).context("unreadable reply from the service")?;
