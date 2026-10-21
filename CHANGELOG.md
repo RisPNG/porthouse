@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- Porthouse is now released under the 0BSD licence instead of MIT or Apache-2.0.
+
+### Added
+- The licences of the Rust libraries, Qt, and the usbip-win2 driver are installed with every package and with the Windows installer, and listed in `THIRD-PARTY-LICENSES.md`.
+
 ## 0.3.0 (21 October 2026)
 
 First public release. The project was called netusb before this release and is now Porthouse. Nothing carries over from earlier builds, so computers have to be paired again.

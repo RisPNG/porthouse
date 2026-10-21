@@ -24,6 +24,7 @@ install(FILES packaging/linux/porthouse.sysusers
         DESTINATION lib/sysusers.d RENAME porthouse.conf)
 install(FILES packaging/linux/porthouse-autostart.desktop
         DESTINATION /etc/xdg/autostart RENAME porthouse.desktop)
-install(FILES LICENSE-MIT LICENSE-APACHE DESTINATION ${CMAKE_INSTALL_DOCDIR})
+install(FILES LICENSE THIRD-PARTY-LICENSES.md DESTINATION ${CMAKE_INSTALL_DOCDIR})
+install(DIRECTORY licenses DESTINATION ${CMAKE_INSTALL_DOCDIR})
 
 include(packaging/linux/cpack.cmake)

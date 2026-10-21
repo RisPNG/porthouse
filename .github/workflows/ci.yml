@@ -16,6 +16,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: toolchain
         run: rustup show && rustup component add clippy rustfmt
+      - name: third-party licence list is current
+        run: python3 scripts/third-party-licenses.py --check
       - name: format
         run: cargo fmt --check
       - name: clippy

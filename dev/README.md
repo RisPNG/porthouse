@@ -145,6 +145,15 @@ Not covered by automated tests: physical USB devices (beyond manual runs), the W
 - USB/IP: <https://docs.kernel.org/usb/usbip_protocol.html>. Porthouse uses its URB message format between the client service and the kernel or driver. The control protocol and everything around it (pairing, framing, discovery, the control channel) is Porthouse's own and is not compatible with other USB-over-network products.
 - Microsoft OS 1.0 descriptors, used only by the test device, tell Windows to bind WinUSB automatically.
 
+## Licensing
+
+Porthouse's own code is under the [0BSD licence](../LICENSE). Third-party code keeps its own licence and the notices have to travel with the binaries:
+
+- `licenses/rust-crates.txt` lists every Rust crate with its licence text. Regenerate it with `python3 scripts/third-party-licenses.py` whenever `Cargo.lock` changes. CI fails when it is stale.
+- `licenses/LGPL-3.0.txt` and `GPL-3.0.txt` accompany the Qt files that the Windows installer ships, and `THIRD-PARTY-LICENSES.md` explains how to replace them and where the Qt source is. Do not add Qt modules that are GPL-only or commercial-only to the program.
+- `licenses/usbip-win2.txt` is the BSD-2-Clause text of the driver whose installer the Windows installer bundles.
+- The Linux packages, the Arch package, and the Windows installer install `LICENSE`, `THIRD-PARTY-LICENSES.md`, and the `licenses` folder. Add every new kind of bundled component to `THIRD-PARTY-LICENSES.md`.
+
 ## Releasing and signing
 
 ### Make a release

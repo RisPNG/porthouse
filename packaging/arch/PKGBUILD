@@ -5,7 +5,7 @@ pkgrel=1
 pkgdesc='Use USB devices that are plugged into other computers, and share yours'
 arch=('x86_64')
 url='https://github.com/RisPNG/porthouse'
-license=('MIT OR Apache-2.0')
+license=('0BSD')
 depends=('qt6-base' 'qt6-declarative' 'kmod' 'systemd')
 makedepends=('cargo' 'cmake' 'ninja')
 options=('!lto')
@@ -37,4 +37,5 @@ check() {
 package() {
   cd "$pkgname-$pkgver"
   DESTDIR="$pkgdir" cmake --install build
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }

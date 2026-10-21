@@ -29,7 +29,7 @@ UninstallDisplayIcon={app}\porthouse.exe
 SetupIconFile={#Stage}\porthouse.ico
 CloseApplications=yes
 RestartApplications=no
-LicenseFile={#Stage}\LICENSE-MIT
+LicenseFile={#Stage}\LICENSE
 
 [Types]
 Name: "full"; Description: "Use and share devices"
@@ -54,8 +54,9 @@ Source: "{#Stage}\porthouse-client.exe"; DestDir: "{app}"; Flags: ignoreversion;
 Source: "{#Stage}\porthouse-clientd.exe"; DestDir: "{app}"; Flags: ignoreversion; Components: client
 Source: "{#Stage}\porthouse-server.exe"; DestDir: "{app}"; Flags: ignoreversion; Components: server
 Source: "{#Stage}\{#UsbipInstaller}"; DestDir: "{tmp}"; Flags: deleteafterinstall; Components: client; Check: NeedsUsbipDriver
-Source: "{#Stage}\LICENSE-MIT"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#Stage}\LICENSE-APACHE"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#Stage}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#Stage}\THIRD-PARTY-LICENSES.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#Stage}\licenses\*"; DestDir: "{app}\licenses"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\Porthouse"; Filename: "{app}\porthouse.exe"

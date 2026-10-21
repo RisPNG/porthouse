@@ -14,7 +14,8 @@ Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path "$stage\gui" | Out-Null
 
 foreach ($f in 'porthouse-server.exe', 'porthouse-clientd.exe', 'porthouse-client.exe') { Copy-Item (Join-Path $Bin $f) $stage }
-Copy-Item 'LICENSE-MIT', 'LICENSE-APACHE', 'gui\icons\porthouse.ico' $stage
+Copy-Item 'LICENSE', 'THIRD-PARTY-LICENSES.md', 'gui\icons\porthouse.ico' $stage
+Copy-Item -Recurse 'licenses' $stage
 
 # The program with the Qt files it needs. Only the Basic style is used, so only that is shipped.
 Copy-Item (Join-Path $GuiBuild 'porthouse.exe') "$stage\gui"

@@ -61,6 +61,6 @@ How it works inside, how to build it, how it is tested, and how releases are mad
 
 ## Licence
 
-Dual licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option.
+Porthouse is released under the [0BSD licence](LICENSE), which lets you do anything with it, no strings attached.
 
-Porthouse uses the public USB/IP protocol format and, on Windows, the third-party usbip-win2 driver, which is BSD-2-Clause licensed.
+The programs also contain or use other people's work under their own licences: Rust libraries, Qt, and on Windows the usbip-win2 driver. They are listed in [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md), and the full texts are installed with Porthouse.
