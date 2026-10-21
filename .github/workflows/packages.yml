@@ -87,7 +87,7 @@ jobs:
         run: |
           cd build
           if [ "${{ matrix.kind }}" = deb ]; then cpack -G DEB; else cpack -G RPM; fi
-          ls -l *.deb *.rpm 2>/dev/null
+          ls -l netusb-*
       - uses: actions/upload-artifact@v4
         with:
           name: package-${{ matrix.flavor }}
