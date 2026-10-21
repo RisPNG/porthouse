@@ -689,6 +689,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "netusb-ipc"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "tokio",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "netusb-proto"
 version = "0.2.0"
 dependencies = [
