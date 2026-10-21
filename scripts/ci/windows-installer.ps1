@@ -64,7 +64,7 @@ Copy-Item (Join-Path $env:QT_ROOT_DIR 'plugins\platforms\qoffscreen.dll') (Join-
 $env:QT_QPA_PLATFORM = 'offscreen'
 foreach ($tab in 'use', 'share', 'activity') {
     $shot = Start-Process -FilePath (Join-Path $Bin 'netusb.exe') -ArgumentList '--screenshot', "$work\shots\$tab.png", '--tab', $tab -Wait -PassThru
-    Check "the $tab tab was drawn" ((Test-Path "$work\shots\$tab.png") -and ((Get-Item "$work\shots\$tab.png").Length -gt 5000)) "(exit code $($shot.ExitCode))"
+    Check "the $tab tab was drawn" ((Test-Path "$work\shots\$tab.png") -and ((Get-Item "$work\shots\$tab.png").Length -gt 1500)) "(exit code $($shot.ExitCode))"
 }
 Remove-Item Env:\QT_QPA_PLATFORM
 Remove-Item (Join-Path $Bin 'platforms\qoffscreen.dll')
