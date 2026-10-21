@@ -108,6 +108,18 @@ sudo ./scripts/live-test.sh 5-1  # full loopback: a local device re-attached thr
 `e2e-claim.sh` and `live-test.sh` take the device away from the host for a few seconds at a time and
 always restore it. Use a device you can spare, and see the notes at the top of each script.
 
+## Testing without hardware: the virtual mouse
+
+`netusb-server run --test-device mouse` adds a software HID mouse (`99-1`, VID:PID 1209:0001) that
+draws a small square with the pointer of whoever attaches it. It makes the whole attach path, kernel
+or driver included, testable on a machine with no spare USB hardware, and it carries real interrupt
+traffic. It is opt-in because it moves a pointer.
+
+`.github/workflows/ci.yml` uses it: on a real Windows runner it installs the `usbip-win2` driver,
+attaches the virtual mouse through `netusb-client.exe`, and checks that Windows enumerates the device
+and the pointer moves; on a Linux runner it does the same with `vhci_hcd` and reads the resulting
+input events. `netusb-client use HOST BUSID --seconds N` attaches for a fixed time.
+
 ## Status and limitations
 
 | Area | State |
