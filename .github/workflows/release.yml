@@ -15,9 +15,12 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13.11'
       - name: the tag matches the version in Cargo.toml and CHANGELOG.md
         run: |
-          V=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          V=$(python3 -c "import tomllib; print(tomllib.load(open('Cargo.toml', 'rb'))['workspace']['package']['version'])")
           [ "${GITHUB_REF_NAME}" = "v$V" ] || { echo "tag ${GITHUB_REF_NAME} does not match Cargo.toml version $V" >&2; exit 1; }
           grep -q "^## $V " CHANGELOG.md || { echo "CHANGELOG.md has no section for $V" >&2; exit 1; }
 

@@ -7,7 +7,7 @@ arch=('x86_64')
 url='https://github.com/RisPNG/porthouse'
 license=('0BSD')
 depends=('qt6-base' 'qt6-declarative' 'kmod' 'systemd')
-makedepends=('cargo' 'cmake' 'ninja')
+makedepends=('cargo' 'cmake' 'ninja' 'python>=3.11')
 options=('!lto')
 install=porthouse.install
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")

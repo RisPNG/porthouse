@@ -8,7 +8,8 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 
-$version = [regex]::Match((Get-Content Cargo.toml -Raw), '(?m)^version = "([0-9.]+)"').Groups[1].Value
+$version = python -c "import tomllib; print(tomllib.load(open('Cargo.toml', 'rb'))['workspace']['package']['version'])"
+if ($LASTEXITCODE -ne 0) { throw 'cannot read the version from Cargo.toml' }
 $stage = "$PWD\dist\stage"
 Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path "$stage\gui" | Out-Null

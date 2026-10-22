@@ -17,7 +17,7 @@ Layout: `crates/proto` (wire formats), `crates/common` (identity, trust, TLS, pa
 
 ### The program
 
-The program needs Qt 6.4 or later with Qt Quick Controls, and CMake.
+The program needs Qt 6.4 or later with Qt Quick Controls, CMake, and Python 3.11 or later.
 
 ```bash
 cmake -S gui -B build/gui -G Ninja -DCMAKE_BUILD_TYPE=Release
@@ -121,7 +121,7 @@ Everything below runs in continuous integration on GitHub-hosted machines, and m
 
 | Workflow and job | What it proves |
 |---|---|
-| ci: build, lint, tests | formatting, clippy with warnings as errors, unit tests, and the pairing and authorization attack suite |
+| ci: build, lint, tests | Clippy correctness and suspicious-code checks, unit tests, and the pairing and authorisation attack suite |
 | ci: linux attach | real `vhci_hcd`: the virtual mouse enumerates and delivers pointer events, plus raw interrupt reports read through libusb |
 | ci: linux engine | a kernel device shared by the real `usbfs` engine and driven through control, bulk, cancel, ordering, and overflow checks |
 | ci: linux dead-client | a client whose network vanishes releases its device within a minute |

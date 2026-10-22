@@ -62,14 +62,14 @@ jobs:
         run: |
           apt-get update -y
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            ca-certificates cmake ninja-build g++ file dpkg-dev xz-utils \
+            ca-certificates cmake ninja-build g++ file dpkg-dev xz-utils python3 \
             qt6-base-dev qt6-declarative-dev qt6-declarative-dev-tools libgl1-mesa-dev \
             qt6-qpa-plugins qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-layouts \
             qml6-module-qtquick-templates qml6-module-qtquick-window qml6-module-qtqml-workerscript
       - name: build tools (Fedora)
         if: matrix.kind == 'rpm'
         run: |
-          dnf install -y cmake ninja-build gcc-c++ rpm-build file \
+          dnf install -y cmake ninja-build gcc-c++ rpm-build file python3 \
             qt6-qtbase-devel qt6-qtdeclarative-devel mesa-libGL-devel
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
